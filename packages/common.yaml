@@ -10,6 +10,9 @@ api:
 
 ota:
   platform: esphome
+  on_begin:
+    then:
+      - script.execute: ota_blink
 
 time:
   - platform: sntp
@@ -20,11 +23,12 @@ wifi:
 
   on_connect:
     then:
+      - script.stop: wifi_blink
       - light.turn_on: status_led
 
   on_disconnect:
     then:
-      - light.turn_off: status_led
+      - script.execute: wifi_blink
 
 web_server:
   port: 80
@@ -69,6 +73,7 @@ button:
     name: "Reboot to Safe Mode"
     entity_category: config
 
+
 # -----------------------------
 # SI Gateway Status LED
 # -----------------------------
@@ -83,3 +88,40 @@ light:
     output: status_led_output
     id: status_led
     internal: true
+
+
+# -----------------------------
+# LED behaviour scripts
+# -----------------------------
+
+script:
+
+  # Slow blink while WiFi not connected
+  - id: wifi_blink
+    mode: restart
+    then:
+      - repeat:
+          while:
+            not:
+              wifi.connected:
+          then:
+            - light.toggle: status_led
+            - delay: 800ms
+
+  # Fast blink during OTA
+  - id: ota_blink
+    mode: restart
+    then:
+      - repeat:
+          count: 200
+          then:
+            - light.toggle: status_led
+            - delay: 150ms
+
+
+# Start blinking on boot until WiFi connects
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - script.execute: wifi_blink
