@@ -1,9 +1,20 @@
+substitutions:
+  private_overrides: ${ {} if public else "!include private.yaml" }
+  public_overrides: !include public.yaml
+  public: false
+  logger_level: INFO
+
 logger:
+  level: ${logger_level}
 
 api:
 
 ota:
   platform: esphome
+
+time:
+  - platform: sntp
+    id: sntp_
 
 wifi:
   ap:
@@ -12,3 +23,44 @@ web_server:
   port: 80
 
 captive_portal:
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP address"
+      entity_category: diagnostic
+    ssid:
+      name: "SSID"
+      entity_category: diagnostic
+    bssid:
+      name: "BSSID"
+      entity_category: diagnostic
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+    device_class: duration
+    disabled_by_default: true
+    entity_category: diagnostic
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    disabled_by_default: true
+    entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
+  - platform: safe_mode
+    name: "Reboot to Safe Mode"
+    entity_category: config
+
+packages:
+  - ${ public_overrides if public else private_overrides }
