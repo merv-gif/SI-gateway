@@ -1,21 +1,10 @@
-# Substitutions allow easy generation of firmware binaries
-# that contain no private information, or have a different
-# logger level set
-#
-# e.g.:
-# $ esphome -s public true -s logger_level DEBUG run example.yaml
-
 substitutions:
-  private_overrides: ${ {} if public else "!include private.yaml" }
-  public_overrides: !include public.yaml
-  public: false
   logger_level: INFO
 
-# Enable logging
 logger:
   level: ${logger_level}
 
-# Enable Home Assistant API
+# Home Assistant API
 api:
 
 ota:
@@ -70,6 +59,3 @@ button:
   - platform: safe_mode
     name: "Reboot to Safe Mode"
     entity_category: config
-
-packages:
-  - ${ public_overrides if public else private_overrides }
