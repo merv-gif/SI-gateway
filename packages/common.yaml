@@ -12,10 +12,6 @@ ota:
 wifi:
   ap:
 
-time:
-  - platform: sntp
-    id: sntp_time
-
 web_server:
   port: 80
 
