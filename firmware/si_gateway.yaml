@@ -1,0 +1,25 @@
+substitutions:
+  logger_level: INFO
+  public: true
+
+esphome:
+  name: si-gateway
+  friendly_name: SI Gateway
+
+packages:
+  common: !include ../packages/common.yaml
+  device: !include ../packages/esp32_rs485.yaml
+  modbus:
+    file: ../packages/sunsynk_modbus.yaml
+    vars:
+      modbus_controller_id: inverter
+      id_prefix: inverter_
+      name_prefix: "Inverter "
+
+modbus_controller:
+  - id: inverter
+    address: 0x01
+    modbus_id: modbus_485
+    setup_priority: -10
+    update_interval: 15s
+    command_throttle: 50ms
