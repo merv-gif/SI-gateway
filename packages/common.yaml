@@ -1,8 +1,4 @@
-substitutions:
-  logger_level: INFO
-
 logger:
-  level: ${logger_level}
 
 api:
 
