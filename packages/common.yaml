@@ -23,55 +23,16 @@ wifi:
 
   on_connect:
     then:
-      - script.stop: wifi_blink
       - light.turn_on: status_led
 
   on_disconnect:
     then:
-      - script.execute: wifi_blink
+      - light.turn_off: status_led
 
 web_server:
   port: 80
 
 captive_portal:
-
-text_sensor:
-  - platform: version
-    name: "ESPHome Version"
-    entity_category: diagnostic
-
-  - platform: wifi_info
-    ip_address:
-      name: "IP address"
-      entity_category: diagnostic
-    ssid:
-      name: "SSID"
-      entity_category: diagnostic
-    bssid:
-      name: "BSSID"
-      entity_category: diagnostic
-
-sensor:
-  - platform: uptime
-    name: "Uptime"
-    device_class: duration
-    disabled_by_default: true
-    entity_category: diagnostic
-
-  - platform: wifi_signal
-    name: "WiFi Signal"
-    update_interval: 60s
-    disabled_by_default: true
-    entity_category: diagnostic
-
-button:
-  - platform: restart
-    name: "Restart"
-    entity_category: config
-
-  - platform: safe_mode
-    name: "Reboot to Safe Mode"
-    entity_category: config
 
 
 # -----------------------------
@@ -91,24 +52,11 @@ light:
 
 
 # -----------------------------
-# LED behaviour scripts
+# OTA LED behaviour
 # -----------------------------
 
 script:
 
-  # Slow blink while WiFi not connected
-  - id: wifi_blink
-    mode: restart
-    then:
-      - repeat:
-          while:
-            not:
-              wifi.connected:
-          then:
-            - light.toggle: status_led
-            - delay: 800ms
-
-  # Fast blink during OTA
   - id: ota_blink
     mode: restart
     then:
@@ -119,9 +67,61 @@ script:
             - delay: 150ms
 
 
-# Start blinking on boot until WiFi connects
-esphome:
-  on_boot:
-    priority: -100
+# -----------------------------
+# Blink LED while WiFi offline
+# -----------------------------
+
+interval:
+  - interval: 800ms
     then:
-      - script.execute: wifi_blink
+      if:
+        condition:
+          not:
+            wifi.connected:
+        then:
+          - light.toggle: status_led
+
+
+# -----------------------------
+# Diagnostics
+# -----------------------------
+
+text_sensor:
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
+
+  - platform: wifi_info
+    ip_address:
+      name: "IP address"
+      entity_category: diagnostic
+    ssid:
+      name: "SSID"
+      entity_category: diagnostic
+    bssid:
+      name: "BSSID"
+      entity_category: diagnostic
+
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+    device_class: duration
+    disabled_by_default: true
+    entity_category: diagnostic
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    disabled_by_default: true
+    entity_category: diagnostic
+
+
+button:
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
+  - platform: safe_mode
+    name: "Reboot to Safe Mode"
+    entity_category: config
