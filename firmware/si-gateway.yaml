@@ -1,9 +1,6 @@
-substitutions:
-  inv: "1"
-
 esphome:
-  name: si-gateway-${inv}
-  friendly_name: SI Gateway ${inv}
+  name: si-gateway-1
+  friendly_name: SI Gateway-1
 
 logger:
 
@@ -39,7 +36,7 @@ packages:
         vars:
           modbus_controller_id: inverter
           id_prefix: inverter_
-          name_prefix: "Inv${inv} "
+          name_prefix: "Inverter "
     ref: main
 
 modbus_controller:
