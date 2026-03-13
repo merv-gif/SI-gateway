@@ -2,31 +2,23 @@ substitutions:
   public: false
   logger_level: INFO
 
-
 logger:
   level: ${logger_level}
 
-
 api:
-
 
 ota:
   platform: esphome
-
 
 time:
   - platform: sntp
     id: sntp_time
 
-
 wifi:
   ap:
-  reboot_timeout: 0s
-
 
 web_server:
   port: 80
-
 
 captive_portal:
 
