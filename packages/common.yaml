@@ -4,7 +4,6 @@ substitutions:
 logger:
   level: ${logger_level}
 
-# Home Assistant API
 api:
 
 ota:
