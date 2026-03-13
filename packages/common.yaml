@@ -3,83 +3,32 @@ substitutions:
   public: false
   logger_level: INFO
 
+
 logger:
   level: ${logger_level}
 
+
 api:
+
 
 ota:
   platform: esphome
-  on_begin:
-    then:
-      - script.execute: ota_blink
+
 
 time:
   - platform: sntp
     id: sntp_
 
+
 wifi:
   ap:
 
-  on_connect:
-    then:
-      - light.turn_on: status_led
-
-  on_disconnect:
-    then:
-      - light.turn_off: status_led
 
 web_server:
   port: 80
 
+
 captive_portal:
-
-
-# -----------------------------
-# SI Gateway Status LED
-# -----------------------------
-
-output:
-  - platform: gpio
-    pin: GPIO4
-    id: status_led_output
-
-light:
-  - platform: binary
-    output: status_led_output
-    id: status_led
-    internal: true
-
-
-# -----------------------------
-# OTA LED behaviour
-# -----------------------------
-
-script:
-
-  - id: ota_blink
-    mode: restart
-    then:
-      - repeat:
-          count: 200
-          then:
-            - light.toggle: status_led
-            - delay: 150ms
-
-
-# -----------------------------
-# Blink LED while WiFi offline
-# -----------------------------
-
-interval:
-  - interval: 800ms
-    then:
-      if:
-        condition:
-          not:
-            wifi.connected:
-        then:
-          - light.toggle: status_led
 
 
 # -----------------------------
