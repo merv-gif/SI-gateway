@@ -1,6 +1,5 @@
 substitutions:
-  private_overrides: ${ {} if public else "!include private.yaml" }
-  public_overrides: !include public.yaml
+
   public: false
   logger_level: INFO
 
@@ -62,5 +61,4 @@ button:
     name: "Reboot to Safe Mode"
     entity_category: config
 
-packages:
-  - ${ public_overrides if public else private_overrides }
+
