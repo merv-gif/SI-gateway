@@ -1,34 +1,50 @@
 substitutions:
-  logger_level: INFO
-  public: true
+  inv: "1"
 
 esphome:
-  name: si-gateway
-  friendly_name: SI Gateway
+  name: si-gateway-${inv}
+  friendly_name: SI Gateway ${inv}
+
+logger:
+
+api:
+
+ota:
+  platform: esphome
+
+wifi:
+  ap:
+
+web_server:
+  port: 80
+
+captive_portal:
+
+time:
+  - platform: sntp
+    id: sntp_time
 
 packages:
 
-  core:
+  device:
     url: https://github.com/merv-gif/SI-gateway
     files:
-      - packages/common.yaml
       - packages/esp32_rs485.yaml
     ref: main
 
-  modbus:
+  sunsynk:
     url: https://github.com/merv-gif/SI-gateway
     files:
       - path: packages/sunsynk_modbus.yaml
         vars:
           modbus_controller_id: inverter
           id_prefix: inverter_
-          name_prefix: "Inverter "
+          name_prefix: "Inv${inv} "
     ref: main
 
 modbus_controller:
   - id: inverter
     address: 0x01
     modbus_id: modbus_485
-    setup_priority: -10
     update_interval: 15s
     command_throttle: 50ms
