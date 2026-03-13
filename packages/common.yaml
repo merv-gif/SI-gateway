@@ -18,6 +18,14 @@ time:
 wifi:
   ap:
 
+  on_connect:
+    then:
+      - light.turn_on: status_led
+
+  on_disconnect:
+    then:
+      - light.turn_off: status_led
+
 web_server:
   port: 80
 
@@ -61,4 +69,17 @@ button:
     name: "Reboot to Safe Mode"
     entity_category: config
 
+# -----------------------------
+# SI Gateway Status LED
+# -----------------------------
 
+output:
+  - platform: gpio
+    pin: GPIO4
+    id: status_led_output
+
+light:
+  - platform: binary
+    output: status_led_output
+    id: status_led
+    internal: true
