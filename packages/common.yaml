@@ -1,5 +1,4 @@
 substitutions:
-
   public: false
   logger_level: INFO
 
@@ -17,11 +16,12 @@ ota:
 
 time:
   - platform: sntp
-    id: sntp_
+    id: sntp_time
 
 
 wifi:
   ap:
+  reboot_timeout: 0s
 
 
 web_server:
