@@ -7,24 +7,23 @@ esphome:
   friendly_name: SI Gateway
 
 packages:
-  common:
+
+  core:
     url: https://github.com/merv-gif/SI-gateway
     files:
       - packages/common.yaml
-
-  device:
-    url: https://github.com/merv-gif/SI-gateway
-    files:
       - packages/esp32_rs485.yaml
+    ref: main
 
   modbus:
     url: https://github.com/merv-gif/SI-gateway
     files:
-      - packages/sunsynk_modbus.yaml
-    vars:
-      modbus_controller_id: inverter
-      id_prefix: inverter_
-      name_prefix: "Inverter "
+      - path: packages/sunsynk_modbus.yaml
+        vars:
+          modbus_controller_id: inverter
+          id_prefix: inverter_
+          name_prefix: "Inverter "
+    ref: main
 
 modbus_controller:
   - id: inverter
