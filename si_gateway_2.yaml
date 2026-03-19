@@ -1,1 +1,12 @@
+substitutions:
+  settings_skipped_updates: "30"
+  device_name: si_gateway_2
+  name_prefix: "Inverter 2 "
+  id_prefix: inverter_
+  modbus_address: "2"
+  modbus_controller_id: inverter
 
+packages:
+  common: !include packages/common.yaml
+  rs485: !include packages/esp32_rs485.yaml
+  sunsynk: !include packages/sunsynk_modbus.yaml
