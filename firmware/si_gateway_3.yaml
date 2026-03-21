@@ -1,0 +1,148 @@
+esphome:
+  name: si-gateway-1
+  friendly_name: SI Gateway-1
+
+  on_boot:
+    priority: -10
+    then:
+      # 🟡 Boot
+      - light.turn_on:
+          id: status_led
+          red: 100%
+          green: 100%
+          blue: 0%
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ap:
+
+web_server:
+  port: 80
+
+captive_portal:
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+# ---------- PACKAGES ----------
+
+packages:
+
+  device:
+    url: https://github.com/merv-gif/SI-gateway
+    files:
+      - packages/esp32_rs485.yaml
+    ref: main
+
+  sunsynk:
+    url: https://github.com/merv-gif/SI-gateway
+    files:
+      - path: packages/sunsynk_modbus.yaml
+        vars:
+          modbus_controller_id: inverter
+          id_prefix: inverter_
+          name_prefix: "Inverter "
+    ref: main
+
+# ---------- MODBUS ----------
+
+modbus_controller:
+  - id: inverter
+    address: 0x01
+    modbus_id: modbus_485
+    update_interval: 15s
+    command_throttle: 50ms
+
+# ---------- WATCHDOG ----------
+
+globals:
+  - id: last_modbus_update
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+# ---------- TRUE MODBUS ACTIVITY (FIX) ----------
+# Pick a sensor that ALWAYS updates when comms are real.
+# "output_power" / "load_power" / "grid_power" are ideal.
+
+sensor:
+  - platform: copy
+    source_id: inverter_esphome_load_power   # <-- change if needed
+    id: modbus_watchdog
+    on_value:
+      then:
+        - lambda: |-
+            id(last_modbus_update) = millis();
+
+# ---------- LED ----------
+
+light:
+  - platform: neopixelbus
+    type: GRB
+    variant: WS2812
+    pin: GPIO4
+    num_leds: 1
+    id: status_led
+
+# ---------- LED LOGIC ----------
+
+interval:
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            # 🟡 No WiFi
+            - light.turn_on:
+                id: status_led
+                red: 100%
+                green: 100%
+                blue: 0%
+
+          else:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(last_modbus_update) == 0;
+                then:
+                  # 🔵 WiFi connected, no Modbus yet
+                  - light.turn_on:
+                      id: status_led
+                      red: 0%
+                      green: 0%
+                      blue: 100%
+
+                else:
+                  - if:
+                      condition:
+                        lambda: |-
+                          return (millis() - id(last_modbus_update)) < 10000;
+                      then:
+                        # 🟢 Modbus alive
+                        - light.turn_on:
+                            id: status_led
+                            red: 0%
+                            green: 100%
+                            blue: 0%
+
+                      else:
+                        # 🔴 Modbus dead
+                        - light.turn_on:
+                            id: status_led
+                            red: 100%
+                            green: 0%
+                            blue: 0%
