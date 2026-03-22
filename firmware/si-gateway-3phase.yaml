@@ -49,7 +49,7 @@ packages:
   sunsynk:
     url: https://github.com/merv-gif/SI-gateway
     files:
-      - path: packages/sunsynk_modbus.yaml
+      - path: packages/sunsynk_modbus_3phase.yaml   # ✅ FIXED
         vars:
           modbus_controller_id: inverter
           id_prefix: inverter_
@@ -62,7 +62,7 @@ modbus_controller:
   - id: inverter
     address: 0x01
     modbus_id: modbus_485
-    update_interval: 15s
+    update_interval: 10s          # ✅ improved (was 15s)
     command_throttle: 50ms
 
 # ---------- WATCHDOG ----------
@@ -73,13 +73,12 @@ globals:
     restore_value: no
     initial_value: '0'
 
-# ---------- TRUE MODBUS ACTIVITY (FIX) ----------
-# Pick a sensor that ALWAYS updates when comms are real.
-# "output_power" / "load_power" / "grid_power" are ideal.
+# ---------- TRUE MODBUS ACTIVITY ----------
+# Using CT power = best “alive” signal
 
 sensor:
   - platform: copy
-    source_id: inverter_esphome_load_power   # <-- change if needed
+    source_id: inverter_esphome_grid_ct_power   # ✅ FIXED
     id: modbus_watchdog
     on_value:
       then:
@@ -130,7 +129,7 @@ interval:
                   - if:
                       condition:
                         lambda: |-
-                          return (millis() - id(last_modbus_update)) < 10000;
+                          return (millis() - id(last_modbus_update)) < 15000;   # ✅ aligned with 10s polling
                       then:
                         # 🟢 Modbus alive
                         - light.turn_on:
