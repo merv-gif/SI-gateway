@@ -818,58 +818,58 @@ sensor:
 
 ############################################### OUTPUTS ###############################################
 
-  - platform: modbus_controller            # 166 Aux Power
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}AUX Power"
-    id: ${id_prefix}esphome_aux_power
-    register_type: holding
-    address: 166
+  # 🔥 FIXED: 3-PHASE INVERTER TOTAL POWER
+
+  - platform: template
+    name: "${name_prefix}Inverter Power Total"
+    id: ${id_prefix}esphome_inverter_power_total
     unit_of_measurement: "W"
-    accuracy_decimals: 0
     device_class: power
     state_class: measurement
-    value_type: S_WORD
+    lambda: |-
+      return (
+        id(inverter_esphome_inverter_power_l1).state +
+        id(inverter_esphome_inverter_power_l2).state +
+        id(inverter_esphome_inverter_power_l3).state
+      );
+    update_interval: 5s
 
-  - platform: template                     # Essential Power based on register 175 + 167 - 166
+
+  # 🔥 FIXED: ESSENTIAL POWER (TOTAL)
+
+  - platform: template
     name: "${name_prefix}Essential Power"
     unit_of_measurement: "W"
-    accuracy_decimals: 0
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_167).state - id(inverter_esphome_aux_power).state);
+      return (
+        id(inverter_esphome_inverter_power_total).state +
+        id(inverter_esphome_grid_power_l1).state +
+        id(inverter_esphome_grid_power_l2).state +
+        id(inverter_esphome_grid_power_l3).state -
+        id(inverter_esphome_aux_power).state
+      );
     update_interval: 5s
 
-  - platform: template                     # Essential Power1 based on register 175 + 169 - 166
-    name: "${name_prefix}Essential Power 1"
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    lambda: |-
-      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_169).state - id(inverter_esphome_aux_power).state);
-    update_interval: 5s
 
-  - platform: template                     # Nonessential Power 172 - 167
+  # 🔥 FIXED: NON-ESSENTIAL POWER (TOTAL)
+
+  - platform: template
     name: "${name_prefix}Nonessential Power"
     unit_of_measurement: "W"
-    accuracy_decimals: 0
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_167).state);
+      return (
+        id(inverter_esphome_grid_ct_power).state -
+        (
+          id(inverter_esphome_grid_power_l1).state +
+          id(inverter_esphome_grid_power_l2).state +
+          id(inverter_esphome_grid_power_l3).state
+        )
+      );
     update_interval: 5s
-
-  - platform: template                     # Nonessential Power1 172 - 169
-    name: "${name_prefix}Nonessential Power 1"
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    lambda: |-
-      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_169).state);
-    update_interval: 5s
-
 
 ############################################### ENERGY ################################################
 
