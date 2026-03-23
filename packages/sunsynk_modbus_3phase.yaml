@@ -1609,3 +1609,47 @@ select:
     write_lambda: |-
       uint16_t raw = id(${id_prefix}reg_279_raw).state;
       return ((raw & ~0x0003) | value);
+
+############################################### CONTROL SWITCHES ###############################################
+
+switch:
+
+  # 🔌 GRID CHARGE TOGGLE
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Grid Charge"
+    id: ${id_prefix}toggle_grid_charge
+    register_type: holding
+    address: 248
+    bitmask: 0x0001
+    entity_category: config
+
+  # 🔋 PRIORITY LOAD TOGGLE
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Priority Load"
+    id: ${id_prefix}toggle_priority_load
+    register_type: holding
+    address: 248
+    bitmask: 0x0002
+    entity_category: config
+
+  # ⏱ SYSTEM TIMER TOGGLE
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle System Timer"
+    id: ${id_prefix}toggle_system_timer
+    register_type: holding
+    address: 248
+    bitmask: 0x0004
+    entity_category: config
+
+  # ☀️ SOLAR SELL TOGGLE
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Solar Sell"
+    id: ${id_prefix}toggle_solar_sell
+    register_type: holding
+    address: 248
+    bitmask: 0x0008
+    entity_category: config
