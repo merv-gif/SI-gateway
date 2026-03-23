@@ -301,16 +301,14 @@ sensor:
     device_class: battery
     value_type: S_WORD
     filters:
-      - multiply: 0.01   
-      
+      - multiply: 0.01      
+
 ############################################### INVERTER ##############################################
 
-  # 🔌 INVERTER POWER (PER PHASE)
-
-  - platform: modbus_controller
+  - platform: modbus_controller            # 175 Inverter Power
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Inverter Power L1"
-    id: ${id_prefix}esphome_inverter_power_l1
+    name: "${name_prefix}Inverter Power"
+    id: ${id_prefix}esphome_inverter_power
     register_type: holding
     address: 175
     unit_of_measurement: "W"
@@ -318,35 +316,10 @@ sensor:
     device_class: power
     value_type: S_WORD
 
-  - platform: modbus_controller
+  - platform: modbus_controller            # 154 Inverter Voltage
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Inverter Power L2"
-    id: ${id_prefix}esphome_inverter_power_l2
-    register_type: holding
-    address: 176
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    value_type: S_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Inverter Power L3"
-    id: ${id_prefix}esphome_inverter_power_l3
-    register_type: holding
-    address: 177
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    value_type: S_WORD
-
-
-  # ⚡ VOLTAGE (PER PHASE)
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Voltage L1"
-    id: ${id_prefix}esphome_voltage_l1
+    name: "${name_prefix}Inverter Voltage"
+    id: ${id_prefix}esphome_inverter_voltage
     register_type: holding
     address: 154
     unit_of_measurement: "V"
@@ -355,73 +328,14 @@ sensor:
     state_class: measurement
     filters:
       - multiply: 0.1
-    value_type: U_WORD
+    value_type: U_WORD 
 
-  - platform: modbus_controller
+  - platform: modbus_controller            # 164 Inverter Current
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Voltage L2"
-    id: ${id_prefix}esphome_voltage_l2
-    register_type: holding
-    address: 155
-    unit_of_measurement: "V"
-    accuracy_decimals: 1
-    device_class: voltage
-    state_class: measurement
-    filters:
-      - multiply: 0.1
-    value_type: U_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Voltage L3"
-    id: ${id_prefix}esphome_voltage_l3
-    register_type: holding
-    address: 156
-    unit_of_measurement: "V"
-    accuracy_decimals: 1
-    device_class: voltage
-    state_class: measurement
-    filters:
-      - multiply: 0.1
-    value_type: U_WORD
-
-
-  # 🔌 CURRENT (PER PHASE)
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Current L1"
-    id: ${id_prefix}esphome_current_l1
+    name: "${name_prefix}Inverter Current"
+    id: ${id_prefix}esphome_inverter_current
     register_type: holding
     address: 164
-    unit_of_measurement: "A"
-    accuracy_decimals: 1
-    device_class: current
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Current L2"
-    id: ${id_prefix}esphome_current_l2
-    register_type: holding
-    address: 165
-    unit_of_measurement: "A"
-    accuracy_decimals: 1
-    device_class: current
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Current L3"
-    id: ${id_prefix}esphome_current_l3
-    register_type: holding
-    address: 166
     unit_of_measurement: "A"
     accuracy_decimals: 1
     device_class: current
@@ -459,8 +373,7 @@ sensor:
 
 ############################################### GRID ##################################################
 
-  # 🌐 GRID FREQUENCY (still single)
-  - platform: modbus_controller
+  - platform: modbus_controller            # 079 Grid Frequency
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Grid Frequency"
     id: ${id_prefix}esphome_grid_frequency
@@ -473,37 +386,10 @@ sensor:
     value_type: U_WORD
     state_class: measurement
 
-
-  # ⚡ GRID POWER (PER PHASE)
-
-  - platform: modbus_controller
+  - platform: modbus_controller            # 169 Grid Power
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Power L1"
-    id: ${id_prefix}esphome_grid_power_l1
-    register_type: holding
-    address: 167
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Power L2"
-    id: ${id_prefix}esphome_grid_power_l2
-    register_type: holding
-    address: 168
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Power L3"
-    id: ${id_prefix}esphome_grid_power_l3
+    name: "${name_prefix}Grid Power"
+    id: ${id_prefix}esphome_grid_power_169
     register_type: holding
     address: 169
     unit_of_measurement: "W"
@@ -512,13 +398,34 @@ sensor:
     state_class: measurement
     value_type: S_WORD
 
-
-  # ⚡ GRID VOLTAGE (PER PHASE)
-
-  - platform: modbus_controller
+  - platform: modbus_controller            # 167 Grid LD Power
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Voltage L1"
-    id: ${id_prefix}esphome_grid_voltage_l1
+    name: "${name_prefix}Grid LD Power 167"
+    id: ${id_prefix}esphome_grid_power_167
+    register_type: holding
+    address: 167
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 168 Grid L2 Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid L2 Power 168"
+    id: ${id_prefix}esphome_grid_power_168
+    register_type: holding
+    address: 168
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 150 Grid Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Voltage"
+    id: ${id_prefix}esphome_grid_voltage
     register_type: holding
     address: 150
     unit_of_measurement: "V"
@@ -527,48 +434,70 @@ sensor:
     state_class: measurement
     filters:
       - multiply: 0.1
-    value_type: U_WORD
+    value_type: U_WORD 
 
-  - platform: modbus_controller
+  - platform: modbus_controller            # 160 Grid Current
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Voltage L2"
-    id: ${id_prefix}esphome_grid_voltage_l2
+    name: "${name_prefix}Grid Current"
+    id: ${id_prefix}esphome_grid_current
     register_type: holding
-    address: 151
-    unit_of_measurement: "V"
+    address: 160
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 172 Grid CT Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid CT Power"
+    id: ${id_prefix}esphome_grid_ct_power
+    register_type: holding
+    address: 172
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # Grid Power Import only needed if you want to calculate Daily Energy Totals using ESPHome
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power Import"
+    id: ${id_prefix}esphome_grid_ct_power_import
+    register_type: holding
+    address: 172
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    internal: true
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+    lambda: |-
+      if (x < 0) return 0; else return x;
+
+  - platform: modbus_controller            # Grid Power Export only needed if you want to calculate Daily Energy Totals using ESPHome
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power Export"
+    register_type: holding
+    address: 172
+    unit_of_measurement: "W"
+    id: ${id_prefix}esphome_grid_ct_power_export
+    accuracy_decimals: 0
+    internal: true
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+    lambda: |-
+      if (x > 0) return 0; else return x *-1;
 
 ############################################### LOAD ################################################
 
-  # 🔌 LOAD POWER (PER PHASE)
-
-  - platform: modbus_controller
+  - platform: modbus_controller            # 178 Load Power
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Load Power L1"
-    id: ${id_prefix}esphome_load_power_l1
-    register_type: holding
-    address: 176
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Load Power L2"
-    id: ${id_prefix}esphome_load_power_l2
-    register_type: holding
-    address: 177
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Load Power L3"
-    id: ${id_prefix}esphome_load_power_l3
+    name: "${name_prefix}Load Power"
+    id: ${id_prefix}esphome_load_power
     register_type: holding
     address: 178
     unit_of_measurement: "W"
@@ -577,10 +506,31 @@ sensor:
     state_class: measurement
     value_type: S_WORD
 
+  - platform: modbus_controller            # 176 Load L1 Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load L1 Power"
+    id: ${id_prefix}esphome_load_l1_power
+    register_type: holding
+    address: 176
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
 
-  # ⚡ LOAD FREQUENCY (still single)
+  - platform: modbus_controller            # 177 Load L2 Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load L2 Power"
+    id: ${id_prefix}esphome_load_l2_power
+    register_type: holding
+    address: 177
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
 
-  - platform: modbus_controller
+  - platform: modbus_controller            # 192 Load Frequency
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Load Frequency"
     id: ${id_prefix}esphome_load_frequency
@@ -592,6 +542,7 @@ sensor:
       - multiply: 0.01
     value_type: U_WORD
     state_class: measurement
+
 ############################################### SOLAR PV1 #############################################
 
   - platform: modbus_controller            # 186 PV1 Power
@@ -758,7 +709,47 @@ sensor:
     state_class: measurement
     value_type: S_WORD
 
-    
+  - platform: template                     # Essential Power based on register 175 + 167 - 166
+    name: "${name_prefix}Essential Power"
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    lambda: |-
+      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_167).state - id(inverter_esphome_aux_power).state);
+    update_interval: 5s
+
+  - platform: template                     # Essential Power1 based on register 175 + 169 - 166
+    name: "${name_prefix}Essential Power 1"
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    lambda: |-
+      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_169).state - id(inverter_esphome_aux_power).state);
+    update_interval: 5s
+
+  - platform: template                     # Nonessential Power 172 - 167
+    name: "${name_prefix}Nonessential Power"
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    lambda: |-
+      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_167).state);
+    update_interval: 5s
+
+  - platform: template                     # Nonessential Power1 172 - 169
+    name: "${name_prefix}Nonessential Power 1"
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    lambda: |-
+      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_169).state);
+    update_interval: 5s
+
+
 ############################################### ENERGY ################################################
 
   - platform: modbus_controller            # 070 Day Battery Charge
@@ -930,9 +921,10 @@ sensor:
     value_type: U_WORD
 
 ############################################### OPTIONAL LOCAL ENERGY SENSORS ############################################
+##### Calculates daily energy instead of relying on the inverter registers
+##### You can comment these out if not needed
 
-  # ☀️ PV Energy (OK as-is)
-  - platform: total_daily_energy
+  - platform: total_daily_energy           # Day PV Energy
     name: "${name_prefix}Day PV Energy Local"
     power_id: inverter_esphome_pv_total
     unit_of_measurement: 'kWh'
@@ -941,10 +933,10 @@ sensor:
     accuracy_decimals: 3
     restore: true
     filters:
+      # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
 
-  # 🔋 Battery Charge
-  - platform: total_daily_energy
+  - platform: total_daily_energy           # Day Battery Charge Energy
     name: "${name_prefix}Day Battery Charge Energy Local"
     power_id: inverter_esphome_battery_power_charge
     unit_of_measurement: 'kWh'
@@ -953,10 +945,10 @@ sensor:
     accuracy_decimals: 3
     restore: true
     filters:
+      # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
 
-  # 🔋 Battery Discharge
-  - platform: total_daily_energy
+  - platform: total_daily_energy           # Day Battery DisCharge Energy
     name: "${name_prefix}Day Battery Discharge Energy Local"
     power_id: inverter_esphome_battery_power_discharge
     unit_of_measurement: 'kWh'
@@ -965,18 +957,43 @@ sensor:
     accuracy_decimals: 3
     restore: true
     filters:
+      # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
 
-  # 🏠 LOAD (FIXED → sum of 3 phases)
-  - platform: total_daily_energy
+  - platform: total_daily_energy           # Day Load Energy
     name: "${name_prefix}Day Load Energy Local"
-    power_id: inverter_esphome_load_power_l1   # 👈 use ONE phase for now (safe)
+    power_id: inverter_esphome_load_power
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
     accuracy_decimals: 3
     restore: true
     filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  - platform: total_daily_energy           # Day Grid Import Energy
+    name: "${name_prefix}Day Grid Import Energy Local"
+    power_id: inverter_esphome_grid_ct_power_import
+    unit_of_measurement: 'kWh'
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    restore: true
+    filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  - platform: total_daily_energy           # Day Grid Export Energy
+    name: "${name_prefix}Day Grid Export Energy Local"
+    power_id: inverter_esphome_grid_ct_power_export
+    unit_of_measurement: 'kWh'
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    restore: true
+    filters:
+      # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
 
 ############################################### TEMPERATURE ################################################
