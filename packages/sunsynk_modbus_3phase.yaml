@@ -1044,74 +1044,33 @@ sensor:
     
 ############################################### OPTIONAL LOCAL ENERGY SENSORS ############################################
 
-  - platform: total_daily_energy           # Day PV Energy
-    name: "${name_prefix}Day PV Energy Local"
-    power_id: inverter_esphome_pv_total
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
+# 🔴 DISABLED — using inverter registers instead
+# (prevents package conflicts)
 
-  - platform: total_daily_energy           # Day Battery Charge Energy
-    name: "${name_prefix}Day Battery Charge Energy Local"
-    power_id: inverter_esphome_battery_power_charge
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day PV Energy Local"
+#    power_id: inverter_esphome_pv_total
 
-  - platform: total_daily_energy           # Day Battery DisCharge Energy
-    name: "${name_prefix}Day Battery Discharge Energy Local"
-    power_id: inverter_esphome_battery_power_discharge
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day Battery Charge Energy Local"
+#    power_id: inverter_esphome_battery_power_charge
 
-  # 🔥 FIXED: Use TOTAL LOAD (must exist as template)
-  - platform: total_daily_energy
-    name: "${name_prefix}Day Load Energy Local"
-    power_id: inverter_esphome_load_power_total
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day Battery Discharge Energy Local"
+#    power_id: inverter_esphome_battery_power_discharge
 
-  # 🔥 FIXED: Use CT IMPORT (already correct split logic)
-  - platform: total_daily_energy
-    name: "${name_prefix}Day Grid Import Energy Local"
-    power_id: inverter_esphome_grid_ct_power_import
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day Load Energy Local"
+#    power_id: inverter_esphome_load_power_total
 
-  - platform: total_daily_energy
-    name: "${name_prefix}Day Grid Export Energy Local"
-    power_id: inverter_esphome_grid_ct_power_export
-    unit_of_measurement: 'kWh'
-    state_class: total_increasing
-    device_class: energy
-    accuracy_decimals: 3
-    restore: true
-    filters:
-      - multiply: 0.001
-      
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day Grid Import Energy Local"
+#    power_id: inverter_esphome_grid_ct_power_import
+
+#  - platform: total_daily_energy
+#    name: "${name_prefix}Day Grid Export Energy Local"
+#    power_id: inverter_esphome_grid_ct_power_export
+
 ############################################### TEMPERATURE ################################################
 
   - platform: modbus_controller            # 090 DC Transformer Temperature
