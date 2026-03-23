@@ -627,32 +627,37 @@ sensor:
     value_type: S_WORD
 
 
-# 🔽 IMPORT (DERIVED FROM CT)
+# 🔽 IMPORT ENERGY (from CT)
 
-  - platform: template
-    name: "${name_prefix}Grid Import Power"
-    id: ${id_prefix}esphome_grid_ct_power_import
-    unit_of_measurement: "W"
-    device_class: power
-    state_class: measurement
-    lambda: |-
-      float x = id(inverter_esphome_grid_ct_power).state;
-      if (x < 0) return 0;
-      return x;
+  - platform: total_daily_energy
+    name: "${name_prefix}Day Grid Import Energy Local"
+    power_id: inverter_esphome_grid_ct_power
+    unit_of_measurement: 'kWh'
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    restore: true
+    filters:
+      - lambda: |-
+          if (x < 0) return 0;
+          return x * 0.001;
 
 
-# 🔼 EXPORT (DERIVED FROM CT)
+# 🔼 EXPORT ENERGY (from CT)
 
-  - platform: template
-    name: "${name_prefix}Grid Export Power"
-    id: ${id_prefix}esphome_grid_ct_power_export
-    unit_of_measurement: "W"
-    device_class: power
-    state_class: measurement
-    lambda: |-
-      float x = id(inverter_esphome_grid_ct_power).state;
-      if (x > 0) return 0;
-      return x * -1;
+  - platform: total_daily_energy
+    name: "${name_prefix}Day Grid Export Energy Local"
+    power_id: inverter_esphome_grid_ct_power
+    unit_of_measurement: 'kWh'
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    restore: true
+    filters:
+      - lambda: |-
+          if (x > 0) return 0;
+          return (-x) * 0.001;
+          
 ############################################### LOAD ################################################
 
 # 🔌 LOAD POWER (PER PHASE — TRUE VALUES)
