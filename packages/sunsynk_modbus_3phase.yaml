@@ -1659,6 +1659,7 @@ switch:
 
 number:
 
+  # ✅ SAFE ZONE (no overlap)
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog1 Capacity"
@@ -1692,16 +1693,7 @@ number:
     max_value: 100
     step: 1
 
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog4 Capacity"
-    id: ${id_prefix}prog4_capacity
-    address: 248
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    min_value: 0
-    max_value: 100
-    step: 1
+  # ⚠️ SKIPPED 248 (CONTROL REGISTER)
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
@@ -1714,17 +1706,9 @@ number:
     max_value: 100
     step: 1
 
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog6 Capacity"
-    id: ${id_prefix}prog6_capacity
-    address: 250
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    min_value: 0
-    max_value: 100
-    step: 1
+  # ⚠️ SKIPPED 250 (TIME REGISTER)
 
+  # 🔋 GRID CHARGE CURRENT (SAFE + IMPORTANT)
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Grid Charge Battery Current"
@@ -1735,4 +1719,4 @@ number:
     min_value: 0
     max_value: 185
     step: 1
-    entity_category: config    
+    entity_category: config 
