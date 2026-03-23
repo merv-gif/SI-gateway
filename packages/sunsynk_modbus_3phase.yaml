@@ -818,7 +818,7 @@ sensor:
 
 ############################################### OUTPUTS ###############################################
 
-  # 🔥 FIXED: 3-PHASE INVERTER TOTAL POWER
+  # 🔥 3-PHASE INVERTER TOTAL POWER
 
   - platform: template
     name: "${name_prefix}Inverter Power Total"
@@ -828,49 +828,45 @@ sensor:
     state_class: measurement
     lambda: |-
       return (
-        id(inverter_esphome_inverter_power_l1).state +
-        id(inverter_esphome_inverter_power_l2).state +
-        id(inverter_esphome_inverter_power_l3).state
+        id(${id_prefix}esphome_inverter_power_l1).state +
+        id(${id_prefix}esphome_inverter_power_l2).state +
+        id(${id_prefix}esphome_inverter_power_l3).state
       );
     update_interval: 5s
 
 
-  # 🔥 FIXED: ESSENTIAL POWER (TOTAL)
+  # 🔥 CORRECT: ESSENTIAL POWER = LOAD (NOT INVERTER)
 
   - platform: template
     name: "${name_prefix}Essential Power"
+    id: ${id_prefix}esphome_essential_power
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
     lambda: |-
       return (
-        id(inverter_esphome_inverter_power_total).state +
-        id(inverter_esphome_grid_power_l1).state +
-        id(inverter_esphome_grid_power_l2).state +
-        id(inverter_esphome_grid_power_l3).state -
-        id(inverter_esphome_aux_power).state
+        id(${id_prefix}esphome_load_power_l1).state +
+        id(${id_prefix}esphome_load_power_l2).state +
+        id(${id_prefix}esphome_load_power_l3).state
       );
     update_interval: 5s
 
 
-  # 🔥 FIXED: NON-ESSENTIAL POWER (TOTAL)
+  # 🔥 NON-ESSENTIAL = CT - ESSENTIAL
 
   - platform: template
     name: "${name_prefix}Nonessential Power"
+    id: ${id_prefix}esphome_nonessential_power
     unit_of_measurement: "W"
     device_class: power
     state_class: measurement
     lambda: |-
       return (
-        id(inverter_esphome_grid_ct_power).state -
-        (
-          id(inverter_esphome_grid_power_l1).state +
-          id(inverter_esphome_grid_power_l2).state +
-          id(inverter_esphome_grid_power_l3).state
-        )
+        id(${id_prefix}esphome_grid_ct_power).state -
+        id(${id_prefix}esphome_essential_power).state
       );
     update_interval: 5s
-
+    
 ############################################### ENERGY ################################################
 
   - platform: modbus_controller            # 070 Day Battery Charge
@@ -1243,82 +1239,7 @@ sensor:
     internal: true
     skip_updates: ${settings_skipped_updates}
 
-################################################ SAVE RAW REGISTERS ############################################
 
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}grid_peak_shaving_raw
-    register_type: holding
-    address: 280
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_274_raw
-    register_type: holding
-    address: 274
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_275_raw
-    register_type: holding
-    address: 275
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_276_raw
-    register_type: holding
-    address: 276
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_277_raw
-    register_type: holding
-    address: 277
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_278_raw
-    register_type: holding
-    address: 278
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_279_raw
-    register_type: holding
-    address: 279
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_16_raw
-    register_type: holding
-    address: 16
-    value_type: U_WORD
-    internal: true
-    skip_updates: ${settings_skipped_updates}
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_17_raw
-    register_type: holding
-    address: 17
-    value_type: U_WORD
-    internal: true
-    skip_updates: ${settings_skipped_updates}
-    
 ################################################ TEXT SENSORS ##################################################
 
 text_sensor:
