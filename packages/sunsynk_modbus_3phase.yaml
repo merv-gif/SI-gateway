@@ -1653,3 +1653,86 @@ switch:
     address: 248
     bitmask: 0x0008
     entity_category: config
+
+
+############################################### TIME SLOT SOC ###############################################
+
+number:
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Capacity"
+    id: ${id_prefix}prog1_capacity
+    address: 245
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Capacity"
+    id: ${id_prefix}prog2_capacity
+    address: 246
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Capacity"
+    id: ${id_prefix}prog3_capacity
+    address: 247
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog4 Capacity"
+    id: ${id_prefix}prog4_capacity
+    address: 248
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Capacity"
+    id: ${id_prefix}prog5_capacity
+    address: 249
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog6 Capacity"
+    id: ${id_prefix}prog6_capacity
+    address: 250
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Charge Battery Current"
+    id: ${id_prefix}grid_charge_battery_current
+    address: 210
+    unit_of_measurement: "A"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 185
+    step: 1
+    entity_category: config    
