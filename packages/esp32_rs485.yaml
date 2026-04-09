@@ -1,13 +1,13 @@
-esphome:
-  comment: RS485 interface
-
 uart:
   - id: uart_485
     baud_rate: 9600
-    tx_pin: GPIO22
-    rx_pin: GPIO21
+    tx_pin: GPIO22   # DI
+    rx_pin: GPIO21   # RO
+    debug:
+      direction: BOTH
+      dummy_receiver: true
 
 modbus:
   - id: modbus_485
     uart_id: uart_485
-    flow_control_pin: GPIO17
+    flow_control_pin: GPIO17   # DE (and RE tied together)
