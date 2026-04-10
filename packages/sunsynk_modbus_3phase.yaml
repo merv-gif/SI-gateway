@@ -1,530 +1,1643 @@
+substitutions:
+  settings_skipped_updates: "30"
+
 # ============================================================
-# DIAGNOSTIC YAML — Raw register dump for address verification
-# Flash this alongside (or instead of) the main sensors file.
-# All sensors are INTERNAL so they don't flood HA entities,
-# but they WILL appear in ESPHome logs so you can read them.
+# CORRECTED REGISTER MAP — Sunsynk/Deye 3-Phase (Low Voltage)
+# Source: kellerza/sunsynk definitions3ph.py + klatremis/esphome-for-deye
 #
-# HOW TO USE:
-#   1. Flash this to the ESP device
-#   2. Open ESPHome logs
-#   3. Compare raw values to expected real-world values
-#   4. Use the table below to verify correct addresses
-#
-# WHAT WE ARE HUNTING:
-#   - Voltage L1/L2/L3 showing 1200V  → raw 12000, should be ~2300 for 230V
-#   - Current L1/L2/L3 showing 54.1A  → raw 5410, all identical = wrong address
-#   - Load Power L1 = 10922W, L2 = -1W → clearly offset
-#   - Battery registers all returning 0 or 0xFFFF
+# KEY DIFFERENCES FROM SINGLE-PHASE:
+#   Grid Voltage L1/L2/L3  → 598, 599, 600   (not 150/151/152)
+#   Grid Current L1/L2/L3  → 604, 605, 606   (not 160/161/162)
+#   Grid Power L1/L2/L3    → 601, 602, 603   (not 167/168/169)
+#   Inverter Voltage L1/L2/L3 → 636,637,638  (not 154/155/156)
+#   Inverter Current L1/L2/L3 → 639,640,641  (not 164/165/166)
+#   Inverter Power L1/L2/L3   → 633,634,635  (not 175/176/177)
+#   Load Power L1/L2/L3    → 650, 651, 652   (not 178/179/180)
+#   Load Total Power        → 653             (not template)
+#   Grid CT Total Power     → 625             (not 172)
+#   Battery Power           → 590             (not 190)
+#   Battery Voltage         → 587             (not 183)
+#   Battery SOC             → 588             (not 184)
+#   Battery Current         → 591             (not 191)
+#   Battery Temperature     → 586             (not 182)
+#   PV1 Power               → 672             (not 186)
+#   PV2 Power               → 673             (not 187)
+#   PV1 Voltage             → 676             (not 109)
+#   PV2 Voltage             → 678             (not 111)
+#   PV1 Current             → 677             (not 110)
+#   PV2 Current             → 679             (not 112)
+#   Grid Frequency          → 608             (not 79)
+#   Inverter Frequency      → 644             (not 193)
+#   Load Frequency          → 643             (not 192)
+#   Overall State           → 500             (not 59)
+#   Grid Connected Status   → 194             (same)
+#   Day PV Energy           → 108             (same)
+#   Day Battery Charge      → 70              (same)
+#   Day Battery Discharge   → 71              (same)
+#   Day Grid Import         → 76              (same)
+#   Day Grid Export         → 77              (same)
+#   Day Load Energy         → 84              (same)
+#   DC Transformer Temp     → 90              (same)
+#   Radiator Temperature    → 91              (same)
+#   Time slots (250–255)    →                 (same)
+#   Settings (243–249)      →                 (same)
 # ============================================================
 
-sensor:
+interval:
+  - interval: 3600s
+    then:
+      - if:
+          condition:
+            time.has_time:
+          then:
+            - script.execute: ${id_prefix}sync_time
 
-# ── VOLTAGE BLOCK SCAN (addresses 148–162) ──────────────────
-# Expected: ~2300 raw for 230V (×0.1 filter)
-# If your inverter is 48V battery: battery voltage ~5000 raw
+script:
+  - id: ${id_prefix}sync_time
+    then:
+      - lambda: |-
+          esphome::modbus_controller::ModbusController *controller = id(${modbus_controller_id});
+          time_t now = ::time(nullptr);
+          struct tm *time_info = ::localtime(&now);
+          int seconds = time_info->tm_sec;
+          int minutes = time_info->tm_min;
+          int hour = time_info->tm_hour;
+          int day = time_info->tm_mday;
+          int month = time_info->tm_mon + 1;
+          int year = time_info->tm_year + 1900;
+          int year1 = year - 2000;
+          uint16_t reg22_value = (year1 << 8) | month;
+          uint16_t reg23_value = (day << 8) | hour;
+          uint16_t reg24_value = (minutes << 8) | seconds;
+          if (year != 1970) {
+            std::vector<uint16_t> rtc_data = {reg22_value, reg23_value, reg24_value};
+            esphome::modbus_controller::ModbusCommandItem set_rtc_command =
+                esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(controller, 22, rtc_data.size(), rtc_data);
+            controller->queue_command(set_rtc_command);
+            ESP_LOGI("Time Sync", "Sec:%d Min:%d Hr:%d Day:%d Mon:%d Year:%d", seconds, minutes, hour, day, month, year);
+          }
 
-  - platform: modbus_controller
+############################################### BINARY SENSORS ########################################
+binary_sensor:
+  - platform: modbus_controller            # 194 Grid Connected Status (same as 1-phase)
     modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 148"
-    id: ${id_prefix}raw_148
-    register_type: holding
-    address: 148
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 149"
-    id: ${id_prefix}raw_149
-    register_type: holding
-    address: 149
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 150"
-    id: ${id_prefix}raw_150
-    register_type: holding
-    address: 150
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 151"
-    id: ${id_prefix}raw_151
-    register_type: holding
-    address: 151
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 152"
-    id: ${id_prefix}raw_152
-    register_type: holding
-    address: 152
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 153"
-    id: ${id_prefix}raw_153
-    register_type: holding
-    address: 153
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 154"
-    id: ${id_prefix}raw_154
-    register_type: holding
-    address: 154
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 155"
-    id: ${id_prefix}raw_155
-    register_type: holding
-    address: 155
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 156"
-    id: ${id_prefix}raw_156
-    register_type: holding
-    address: 156
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 157"
-    id: ${id_prefix}raw_157
-    register_type: holding
-    address: 157
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 158"
-    id: ${id_prefix}raw_158
-    register_type: holding
-    address: 158
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 159"
-    id: ${id_prefix}raw_159
-    register_type: holding
-    address: 159
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 160"
-    id: ${id_prefix}raw_160
-    register_type: holding
-    address: 160
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 161"
-    id: ${id_prefix}raw_161
-    register_type: holding
-    address: 161
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 162"
-    id: ${id_prefix}raw_162
-    register_type: holding
-    address: 162
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 163"
-    id: ${id_prefix}raw_163
-    register_type: holding
-    address: 163
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 164"
-    id: ${id_prefix}raw_164
-    register_type: holding
-    address: 164
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 165"
-    id: ${id_prefix}raw_165
-    register_type: holding
-    address: 165
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 166"
-    id: ${id_prefix}raw_166
-    register_type: holding
-    address: 166
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-# ── POWER BLOCK SCAN (addresses 167–181) ────────────────────
-# Expected: S_WORD signed, real power in watts (no filter)
-# Load Power real values should be positive, reasonable wattage
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 167"
-    id: ${id_prefix}raw_167
-    register_type: holding
-    address: 167
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 168"
-    id: ${id_prefix}raw_168
-    register_type: holding
-    address: 168
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 169"
-    id: ${id_prefix}raw_169
-    register_type: holding
-    address: 169
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 170"
-    id: ${id_prefix}raw_170
-    register_type: holding
-    address: 170
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 171"
-    id: ${id_prefix}raw_171
-    register_type: holding
-    address: 171
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 172"
-    id: ${id_prefix}raw_172
-    register_type: holding
-    address: 172
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 173"
-    id: ${id_prefix}raw_173
-    register_type: holding
-    address: 173
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 174"
-    id: ${id_prefix}raw_174
-    register_type: holding
-    address: 174
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 175"
-    id: ${id_prefix}raw_175
-    register_type: holding
-    address: 175
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 176"
-    id: ${id_prefix}raw_176
-    register_type: holding
-    address: 176
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 177"
-    id: ${id_prefix}raw_177
-    register_type: holding
-    address: 177
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 178"
-    id: ${id_prefix}raw_178
-    register_type: holding
-    address: 178
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 179"
-    id: ${id_prefix}raw_179
-    register_type: holding
-    address: 179
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 180"
-    id: ${id_prefix}raw_180
-    register_type: holding
-    address: 180
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 181"
-    id: ${id_prefix}raw_181
-    register_type: holding
-    address: 181
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-# ── BATTERY BLOCK SCAN (addresses 180–195) ──────────────────
-# Expected: Battery SOC = 1–100, Voltage ~48–58V (raw 4800–5800 ×0.01)
-# Battery Power signed, Temperature raw ~1250 for 25°C (offset -1000 ×0.1)
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 182"
-    id: ${id_prefix}raw_182
-    register_type: holding
-    address: 182
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 183"
-    id: ${id_prefix}raw_183
-    register_type: holding
-    address: 183
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 184"
-    id: ${id_prefix}raw_184
-    register_type: holding
-    address: 184
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 185"
-    id: ${id_prefix}raw_185
-    register_type: holding
-    address: 185
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 186"
-    id: ${id_prefix}raw_186
-    register_type: holding
-    address: 186
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 187"
-    id: ${id_prefix}raw_187
-    register_type: holding
-    address: 187
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 188"
-    id: ${id_prefix}raw_188
-    register_type: holding
-    address: 188
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 189"
-    id: ${id_prefix}raw_189
-    register_type: holding
-    address: 189
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 190"
-    id: ${id_prefix}raw_190
-    register_type: holding
-    address: 190
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 191"
-    id: ${id_prefix}raw_191
-    register_type: holding
-    address: 191
-    value_type: S_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 192"
-    id: ${id_prefix}raw_192
-    register_type: holding
-    address: 192
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 193"
-    id: ${id_prefix}raw_193
-    register_type: holding
-    address: 193
-    value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 194"
-    id: ${id_prefix}raw_194
+    name: "${name_prefix}Grid Connected Status"
+    id: ${id_prefix}esphome_grid_connected_status
     register_type: holding
     address: 194
+
+  - platform: modbus_controller           # 500 Gen Peak Shaving Status (3PH: register 500 bitmask)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Gen Peak Shaving Status"
+    id: ${id_prefix}esphome_gen_peak_shaving_status
+    register_type: holding
+    address: 500
+    bitmask: 0x10
+
+  - platform: modbus_controller           # 500 Grid Peak Shaving Status
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Peak Shaving Status"
+    id: ${id_prefix}esphome_grid_peak_shaving_status
+    register_type: holding
+    address: 500
+    bitmask: 0x100
+
+############################################### BATTERY ###############################################
+sensor:
+  - platform: modbus_controller            # 586 Battery Temperature
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Temperature"
+    id: ${id_prefix}esphome_battery_temperature
+    register_type: holding
+    address: 586
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
     value_type: U_WORD
-    internal: false
+    filters:
+      - offset: -1000
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 587 Battery Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Voltage"
+    id: ${id_prefix}esphome_battery_voltage
+    register_type: holding
+    address: 587
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 588 Battery SOC
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery SOC"
+    id: ${id_prefix}esphome_battery_soc
+    register_type: holding
+    address: 588
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    device_class: battery
+    value_type: U_WORD
+
+  - platform: modbus_controller            # 590 Battery Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Power"
+    id: ${id_prefix}esphome_battery_power
+    register_type: holding
+    address: 590
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 590 Battery Power Charge (internal)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Power Charge"
+    id: ${id_prefix}esphome_battery_power_charge
+    register_type: holding
+    address: 590
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    value_type: S_WORD
+    internal: true
+    lambda: |-
+      if (x > 0) return 0; else return x * -1;
+
+  - platform: modbus_controller            # 590 Battery Power Discharge (internal)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Power Discharge"
+    id: ${id_prefix}esphome_battery_power_discharge
+    register_type: holding
+    address: 590
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    value_type: S_WORD
+    internal: true
+    lambda: |-
+      if (x < 0) return 0; else return x;
+
+  - platform: modbus_controller            # 591 Battery Current
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Current"
+    id: ${id_prefix}esphome_battery_current
+    register_type: holding
+    address: 591
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 314 Battery Charge Limit Current
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Charge Limit Current"
+    id: ${id_prefix}esphome_battery_charge_limit_current
+    register_type: holding
+    address: 314
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 315 Battery Discharge Limit Current
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Discharge Limit Current"
+    id: ${id_prefix}esphome_battery_discharge_limit_current
+    register_type: holding
+    address: 315
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 217 Battery Capacity Shutdown
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Capacity Shutdown"
+    id: ${id_prefix}esphome_battery_capacity_shutdown
+    register_type: holding
+    address: 217
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    device_class: battery
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 218 Battery Restart Capacity
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Restart Capacity"
+    id: ${id_prefix}esphome_battery_restart_capacity
+    register_type: holding
+    address: 218
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    device_class: battery
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 219 Battery Low Capacity
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Low Capacity"
+    id: ${id_prefix}esphome_battery_low_capacity
+    register_type: holding
+    address: 219
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    device_class: battery
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 220 Battery Shutdown Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Shutdown voltage"
+    id: ${id_prefix}esphome_battery_shutdown_voltage
+    register_type: holding
+    address: 220
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 221 Battery Restart Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Restart voltage"
+    id: ${id_prefix}esphome_battery_restart_voltage
+    register_type: holding
+    address: 221
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 222 Battery Low Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Low voltage"
+    id: ${id_prefix}esphome_battery_low_voltage
+    register_type: holding
+    address: 222
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 201 Battery Equalization Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Equalization voltage"
+    id: ${id_prefix}esphome_battery_equalisation_voltage
+    register_type: holding
+    address: 201
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 202 Battery Absorption Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Absorption voltage"
+    id: ${id_prefix}esphome_battery_absorbtion_voltage
+    register_type: holding
+    address: 202
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 203 Battery Float Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Float voltage"
+    id: ${id_prefix}esphome_battery_float_voltage
+    register_type: holding
+    address: 203
+    unit_of_measurement: "V"
+    accuracy_decimals: 2
+    device_class: voltage
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+############################################### INVERTER ##############################################
+  - platform: modbus_controller            # 633 Inverter Power L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Inverter Power L1"
+    id: ${id_prefix}esphome_inverter_power_l1
+    register_type: holding
+    address: 633
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 634 Inverter Power L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Inverter Power L2"
+    id: ${id_prefix}esphome_inverter_power_l2
+    register_type: holding
+    address: 634
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 635 Inverter Power L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Inverter Power L3"
+    id: ${id_prefix}esphome_inverter_power_l3
+    register_type: holding
+    address: 635
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 636 Inverter Voltage L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Voltage L1"
+    id: ${id_prefix}esphome_voltage_l1
+    register_type: holding
+    address: 636
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 637 Inverter Voltage L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Voltage L2"
+    id: ${id_prefix}esphome_voltage_l2
+    register_type: holding
+    address: 637
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 638 Inverter Voltage L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Voltage L3"
+    id: ${id_prefix}esphome_voltage_l3
+    register_type: holding
+    address: 638
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 639 Inverter Current L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Current L1"
+    id: ${id_prefix}esphome_current_l1
+    register_type: holding
+    address: 639
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 640 Inverter Current L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Current L2"
+    id: ${id_prefix}esphome_current_l2
+    register_type: holding
+    address: 640
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 641 Inverter Current L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Current L3"
+    id: ${id_prefix}esphome_current_l3
+    register_type: holding
+    address: 641
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 644 Inverter Frequency
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Inverter Frequency"
+    id: ${id_prefix}esphome_inverter_frequency
+    register_type: holding
+    address: 644
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: template                     # Rated Power (from reg 16+17, unchanged)
+    name: "${name_prefix}Rated Power"
+    id: ${id_prefix}esphome_rated_power
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    lambda: |-
+      uint16_t low = id(${id_prefix}reg_16_raw).state;
+      uint16_t high = id(${id_prefix}reg_17_raw).state;
+      return (high << 16 | low);
+    filters:
+      - multiply: 0.1
+
+############################################### GRID ##################################################
+  - platform: modbus_controller            # 608 Grid Frequency
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Frequency"
+    id: ${id_prefix}esphome_grid_frequency
+    register_type: holding
+    address: 608
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 601 Grid Power L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power L1"
+    id: ${id_prefix}esphome_grid_power_l1
+    register_type: holding
+    address: 601
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 602 Grid Power L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power L2"
+    id: ${id_prefix}esphome_grid_power_l2
+    register_type: holding
+    address: 602
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 603 Grid Power L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power L3"
+    id: ${id_prefix}esphome_grid_power_l3
+    register_type: holding
+    address: 603
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 598 Grid Voltage L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Voltage L1"
+    id: ${id_prefix}esphome_grid_voltage_l1
+    register_type: holding
+    address: 598
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 599 Grid Voltage L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Voltage L2"
+    id: ${id_prefix}esphome_grid_voltage_l2
+    register_type: holding
+    address: 599
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 600 Grid Voltage L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Voltage L3"
+    id: ${id_prefix}esphome_grid_voltage_l3
+    register_type: holding
+    address: 600
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 604 Grid Current L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Current L1"
+    id: ${id_prefix}esphome_grid_current_l1
+    register_type: holding
+    address: 604
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 605 Grid Current L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Current L2"
+    id: ${id_prefix}esphome_grid_current_l2
+    register_type: holding
+    address: 605
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 606 Grid Current L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Current L3"
+    id: ${id_prefix}esphome_grid_current_l3
+    register_type: holding
+    address: 606
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+
+  - platform: modbus_controller            # 625 Grid CT Power Total
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Power Total"
+    id: ${id_prefix}esphome_grid_ct_power
+    register_type: holding
+    address: 625
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 625 Grid Import Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Import Power"
+    id: ${id_prefix}esphome_grid_ct_power_import
+    register_type: holding
+    address: 625
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+    lambda: |-
+      if (x < 0) return 0; else return x;
+
+  - platform: modbus_controller            # 625 Grid Export Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Export Power"
+    id: ${id_prefix}esphome_grid_ct_power_export
+    register_type: holding
+    address: 625
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+    lambda: |-
+      if (x > 0) return 0; else return x * -1;
+
+############################################### LOAD ##################################################
+  - platform: modbus_controller            # 650 Load Power L1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load Power L1"
+    id: ${id_prefix}esphome_load_power_l1
+    register_type: holding
+    address: 650
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 651 Load Power L2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load Power L2"
+    id: ${id_prefix}esphome_load_power_l2
+    register_type: holding
+    address: 651
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 652 Load Power L3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load Power L3"
+    id: ${id_prefix}esphome_load_power_l3
+    register_type: holding
+    address: 652
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 643 Load Frequency
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Load Frequency"
+    id: ${id_prefix}esphome_load_frequency
+    register_type: holding
+    address: 643
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+
+############################################### SOLAR PV1 #############################################
+  - platform: modbus_controller            # 672 PV1 Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV1 Power"
+    id: ${id_prefix}esphome_pv1_power
+    register_type: holding
+    address: 672
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: U_WORD
+
+  - platform: modbus_controller            # 676 PV1 Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV1 Voltage"
+    id: ${id_prefix}esphome_pv1_voltage
+    register_type: holding
+    address: 676
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 677 PV1 Current
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV1 Current"
+    id: ${id_prefix}esphome_pv1_current
+    register_type: holding
+    address: 677
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+############################################### SOLAR PV2 #############################################
+  - platform: modbus_controller            # 673 PV2 Power
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV2 Power"
+    id: ${id_prefix}esphome_pv2_power
+    register_type: holding
+    address: 673
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    value_type: U_WORD
+
+  - platform: modbus_controller            # 678 PV2 Voltage
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV2 Voltage"
+    id: ${id_prefix}esphome_pv2_voltage
+    register_type: holding
+    address: 678
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 679 PV2 Current
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}PV2 Current"
+    id: ${id_prefix}esphome_pv2_current
+    register_type: holding
+    address: 679
+    unit_of_measurement: "A"
+    accuracy_decimals: 1
+    device_class: current
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+############################################### SOLAR TOTAL ###########################################
+  - platform: template
+    name: "${name_prefix}Solar Power"
+    id: ${id_prefix}esphome_pv_total
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      return (
+        id(${id_prefix}esphome_pv1_power).state +
+        id(${id_prefix}esphome_pv2_power).state
+      );
+
+############################################### OUTPUTS ###############################################
+  - platform: template
+    name: "${name_prefix}Inverter Power Total"
+    id: ${id_prefix}esphome_inverter_power_total
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      return (
+        id(${id_prefix}esphome_inverter_power_l1).state +
+        id(${id_prefix}esphome_inverter_power_l2).state +
+        id(${id_prefix}esphome_inverter_power_l3).state
+      );
+
+  - platform: template
+    name: "${name_prefix}Essential Power"
+    id: ${id_prefix}esphome_essential_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      return (
+        id(${id_prefix}esphome_load_power_l1).state +
+        id(${id_prefix}esphome_load_power_l2).state +
+        id(${id_prefix}esphome_load_power_l3).state
+      );
+
+  - platform: template
+    name: "${name_prefix}Nonessential Power"
+    id: ${id_prefix}esphome_nonessential_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      return (
+        id(${id_prefix}esphome_grid_ct_power).state -
+        id(${id_prefix}esphome_essential_power).state
+      );
+
+############################################### ENERGY ################################################
+  - platform: modbus_controller            # 070 Day Battery Charge (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day Battery Charge"
+    id: ${id_prefix}esphome_day_battery_charge
+    register_type: holding
+    address: 70
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 071 Day Battery Discharge (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day Battery Discharge"
+    id: ${id_prefix}esphome_day_battery_discharge
+    register_type: holding
+    address: 71
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 072 Total Battery Charge (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total Battery Charge"
+    id: ${id_prefix}esphome_total_battery_charge
+    register_type: holding
+    address: 72
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD_R
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 074 Total Battery Discharge (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total Battery Discharge"
+    id: ${id_prefix}esphome_total_battery_discharge
+    register_type: holding
+    address: 74
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD_R
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 076 Day Grid Import (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day Grid Import"
+    id: ${id_prefix}esphome_day_grid_import
+    register_type: holding
+    address: 76
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 077 Day Grid Export (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day Grid Export"
+    id: ${id_prefix}esphome_day_grid_export
+    register_type: holding
+    address: 77
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 078 Total Grid Import (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total Grid Import"
+    id: ${id_prefix}esphome_total_grid_import
+    register_type: holding
+    address: 78
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 2
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 081 Total Grid Export (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total Grid Export"
+    id: ${id_prefix}esphome_total_grid_export
+    register_type: holding
+    address: 81
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 2
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 084 Day Load Energy (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day Load Energy"
+    id: ${id_prefix}esphome_day_load_energy
+    register_type: holding
+    address: 84
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 2
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 085 Total Load Energy (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total Load Energy"
+    id: ${id_prefix}esphome_total_load_energy
+    register_type: holding
+    address: 85
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 2
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD_R
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 096 Total PV Energy (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Total PV Energy"
+    id: ${id_prefix}esphome_total_pv_energy
+    register_type: holding
+    address: 96
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 2
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD_R
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 108 Day PV Energy (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Day PV Energy"
+    id: ${id_prefix}esphome_day_pv_energy
+    register_type: holding
+    address: 108
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+
+############################################### TEMPERATURE ###########################################
+  - platform: modbus_controller            # 090 DC Transformer Temperature (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}DC Transformer Temperature"
+    id: ${id_prefix}esphome_dc_transformer_temperature
+    register_type: holding
+    address: 90
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - offset: -1000
+      - multiply: 0.1
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 091 Radiator Temperature (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Radiator Temperature"
+    id: ${id_prefix}esphome_radiator_temperature
+    register_type: holding
+    address: 91
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - offset: -1000
+      - multiply: 0.1
+    skip_updates: ${settings_skipped_updates}
+
+############################################### PROG TIME SENSORS #####################################
+  - platform: modbus_controller            # 250 Prog1 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Time"
+    id: ${id_prefix}esphome_system_mode_time1
+    register_type: holding
+    address: 250
+    icon: "mdi:clock"
     entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 251 Prog2 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Time"
+    id: ${id_prefix}esphome_system_mode_time2
+    register_type: holding
+    address: 251
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 252 Prog3 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Time"
+    id: ${id_prefix}esphome_system_mode_time3
+    register_type: holding
+    address: 252
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 253 Prog4 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog4 Time"
+    id: ${id_prefix}esphome_system_mode_time4
+    register_type: holding
+    address: 253
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 254 Prog5 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Time"
+    id: ${id_prefix}esphome_system_mode_time5
+    register_type: holding
+    address: 254
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 255 Prog6 Time (same)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog6 Time"
+    id: ${id_prefix}esphome_system_mode_time6
+    register_type: holding
+    address: 255
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+
+############################################### RAW REGISTERS #########################################
+  - platform: modbus_controller            # 500 Grid/Gen Peak Shaving raw (3PH)
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}grid_peak_shaving_raw
+    register_type: holding
+    address: 500
+    value_type: U_WORD
+    internal: true
+
+  - platform: modbus_controller            # 274–279 Charge Option raws (same)
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_274_raw
+    register_type: holding
+    address: 274
+    value_type: U_WORD
+    internal: true
 
   - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
-    name: "RAW reg 195"
-    id: ${id_prefix}raw_195
+    id: ${id_prefix}reg_275_raw
     register_type: holding
-    address: 195
+    address: 275
     value_type: U_WORD
-    internal: false
-    entity_category: diagnostic
+    internal: true
 
-# ── WHAT TO LOOK FOR IN THE RESULTS ─────────────────────────
-#
-#  Sensor              Expected raw value     Look for
-#  ──────────────────  ─────────────────────  ──────────────────────────────
-#  Grid Voltage L1     ~2300 (×0.1 = 230V)   Find which reg has ~2300
-#  Grid Voltage L2     ~2300                  Should be next reg after L1
-#  Grid Voltage L3     ~2300                  Should be next reg after L2
-#  Battery Voltage     ~5200 (×0.01 = 52V)   Find which reg has ~5000–5800
-#  Battery SOC         1–100 directly         Find which reg has your SOC %
-#  Battery Temp        ~1250 (25°C)           (raw-1000)×0.1 = 25°C
-#  Battery Power       signed watts           Should match inverter display
-#  Load Power L1       signed watts (~200W?)  Currently showing 10922 raw
-#  Grid Frequency      ~5000 (×0.01 = 50Hz)  Find reg with 5000
-#
-# Once you identify which address holds which value, compare
-# to the main YAML and correct any offsets.
-# ─────────────────────────────────────────────────────────────
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_276_raw
+    register_type: holding
+    address: 276
+    value_type: U_WORD
+    internal: true
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_277_raw
+    register_type: holding
+    address: 277
+    value_type: U_WORD
+    internal: true
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_278_raw
+    register_type: holding
+    address: 278
+    value_type: U_WORD
+    internal: true
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_279_raw
+    register_type: holding
+    address: 279
+    value_type: U_WORD
+    internal: true
+
+  - platform: modbus_controller            # 16 raw (for Rated Power)
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_16_raw
+    register_type: holding
+    address: 16
+    value_type: U_WORD
+    internal: true
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: modbus_controller            # 17 raw (for Rated Power)
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}reg_17_raw
+    register_type: holding
+    address: 17
+    value_type: U_WORD
+    internal: true
+    skip_updates: ${settings_skipped_updates}
+
+################################################ TEXT SENSORS #########################################
+text_sensor:
+  - platform: modbus_controller            # 500 Overall State (3PH uses 500, not 59)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Overall State"
+    id: ${id_prefix}esphome_overall_state
+    register_type: holding
+    address: 500
+    raw_encode: HEXBYTES
+    entity_category: diagnostic
+    skip_updates: ${settings_skipped_updates}
+    lambda: |-
+      uint16_t value = modbus_controller::word_from_hex_str(x, 0);
+      switch (value) {
+        case 0: return std::string("standby");
+        case 1: return std::string("selftest");
+        case 2: return std::string("normal");
+        case 3: return std::string("alarm");
+        case 4: return std::string("fault");
+        default: return std::string("unknown");
+      }
+
+  - platform: template
+    name: "${name_prefix}Time Slot 1"
+    id: ${id_prefix}esphome_time_slot_1
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time1).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time1).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: template
+    name: "${name_prefix}Time Slot 2"
+    id: ${id_prefix}esphome_time_slot_2
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time2).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time2).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: template
+    name: "${name_prefix}Time Slot 3"
+    id: ${id_prefix}esphome_time_slot_3
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time3).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time3).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: template
+    name: "${name_prefix}Time Slot 4"
+    id: ${id_prefix}esphome_time_slot_4
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time4).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time4).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: template
+    name: "${name_prefix}Time Slot 5"
+    id: ${id_prefix}esphome_time_slot_5
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time5).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time5).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: template
+    name: "${name_prefix}Time Slot 6"
+    id: ${id_prefix}esphome_time_slot_6
+    icon: "mdi:clock"
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(${id_prefix}esphome_system_mode_time6).has_state()) return {"--:--"};
+      int raw = (int) id(${id_prefix}esphome_system_mode_time6).state;
+      if (raw == 65535 || raw < 0) return {"--:--"};
+      int hours = raw / 100;
+      int minutes = raw % 100;
+      if (hours > 23 || minutes > 59) return {"--:--"};
+      char buf[6];
+      snprintf(buf, sizeof(buf), "%02d:%02d", hours, minutes);
+      return {buf};
+
+  - platform: modbus_controller            # Serial (raw internal, reg 3 same)
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}esphome_serial
+    register_type: holding
+    address: 3
+    register_count: 5
+    raw_encode: HEXBYTES
+    internal: true
+    skip_updates: ${settings_skipped_updates}
+
+  - platform: template
+    name: "${name_prefix}Serial"
+    id: ${id_prefix}esphome_ascii_serial
+    icon: "mdi:text"
+    entity_category: diagnostic
+    lambda: |-
+      std::string hexData = id(${id_prefix}esphome_serial).state;
+      if (hexData.empty()) return {"unknown"};
+      std::string asciiData;
+      for (size_t i = 0; i < hexData.length(); i += 2) {
+        std::string byte = hexData.substr(i, 2);
+        char chr = static_cast<char>(std::stoi(byte, nullptr, 16));
+        asciiData.push_back(chr);
+      }
+      return {asciiData};
+
+################################################ SELECT SENSORS #######################################
+select:
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}esphome_select_energy_pattern
+    name: "${name_prefix}Energy Pattern"
+    address: 243
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "Battery first": 0
+      "Load first": 1
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}esphome_select_work_mode
+    name: "${name_prefix}Work Mode"
+    address: 244
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "Selling First": 0
+      "Zero Export + Limit to Load Only": 1
+      "Limited to Home": 2
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    id: ${id_prefix}esphome_select_generator_input
+    name: "${name_prefix}Generator Input"
+    address: 235
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "Disable": 0
+      "Output": 1
+      "Input": 2
+
+  - platform: modbus_controller            # 500 Grid Peak Shaving (3PH: register 500)
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Peak Shaving"
+    id: ${id_prefix}esphome_select_grid_peak_shaving
+    address: 500
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "Disabled": 0
+      "Enabled": 256
+    lambda: |-
+      if (!id(${id_prefix}grid_peak_shaving_raw).has_state()) return {};
+      if ((x & 0x0100) == 0) return std::string("Disabled");
+      if ((x & 0x0100) == 256) return std::string("Enabled");
+      return {};
+    write_lambda: |-
+      uint16_t unmodified = id(${id_prefix}grid_peak_shaving_raw).state;
+      uint16_t modified = ((unmodified & ~0x0100) | value);
+      return modified;
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_1
+    address: 274
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_274_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_274_raw).state;
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_2
+    address: 275
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_275_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_275_raw).state;
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_3
+    address: 276
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_276_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_276_raw).state;
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog4 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_4
+    address: 277
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_277_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_277_raw).state;
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_5
+    address: 278
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_278_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_278_raw).state;
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog6 Charge Option"
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_6
+    address: 279
+    value_type: U_WORD
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
+    lambda: |-
+      if (!id(${id_prefix}reg_279_raw).has_state()) return {};
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
+      }
+      return {};
+    write_lambda: |-
+      uint16_t raw = id(${id_prefix}reg_279_raw).state;
+      return ((raw & ~0x0003) | value);
+
+############################################### CONTROL SWITCHES ######################################
+switch:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Grid Charge"
+    id: ${id_prefix}toggle_grid_charge
+    register_type: holding
+    address: 248
+    bitmask: 0x0001
+    entity_category: config
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Priority Load"
+    id: ${id_prefix}toggle_priority_load
+    register_type: holding
+    address: 248
+    bitmask: 0x0002
+    entity_category: config
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle System Timer"
+    id: ${id_prefix}toggle_system_timer
+    register_type: holding
+    address: 248
+    bitmask: 0x0004
+    entity_category: config
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Solar Sell"
+    id: ${id_prefix}toggle_solar_sell
+    register_type: holding
+    address: 248
+    bitmask: 0x0008
+    entity_category: config
+
+############################################### TIME SLOT SOC #########################################
+number:
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Capacity"
+    id: ${id_prefix}prog1_capacity
+    address: 245
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Capacity"
+    id: ${id_prefix}prog2_capacity
+    address: 246
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Capacity"
+    id: ${id_prefix}prog3_capacity
+    address: 247
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  # NOTE: 248 = control register (switches above), no Prog4 capacity address
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Capacity"
+    id: ${id_prefix}prog5_capacity
+    address: 249
+    unit_of_measurement: "%"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 100
+    step: 1
+
+  - platform: modbus_controller
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Charge Battery Current"
+    id: ${id_prefix}grid_charge_battery_current
+    address: 210
+    unit_of_measurement: "A"
+    value_type: U_WORD
+    min_value: 0
+    max_value: 185
+    step: 1
+    entity_category: config
