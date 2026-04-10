@@ -104,238 +104,81 @@ binary_sensor:
 
 ############################################### BATTERY ###############################################
 sensor:
-  - platform: modbus_controller            # 586 Battery Temperature
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Battery Temperature"
     id: ${id_prefix}esphome_battery_temperature
     register_type: holding
     address: 586
     unit_of_measurement: "°C"
-    accuracy_decimals: 1
     device_class: temperature
     state_class: measurement
-    value_type: U_WORD
+    value_type: S_WORD
     filters:
-      - offset: -1000
-      - multiply: 0.1
+      - offset: -100
 
-  - platform: modbus_controller            # 587 Battery Voltage
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Battery Voltage"
     id: ${id_prefix}esphome_battery_voltage
     register_type: holding
     address: 587
     unit_of_measurement: "V"
-    accuracy_decimals: 1
     device_class: voltage
     state_class: measurement
     value_type: U_WORD
     filters:
-      - multiply: 0.01
+      - multiply: 0.1
 
-  - platform: modbus_controller            # 588 Battery SOC
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Battery SOC"
     id: ${id_prefix}esphome_battery_soc
     register_type: holding
     address: 588
     unit_of_measurement: "%"
-    accuracy_decimals: 0
     device_class: battery
     value_type: U_WORD
 
-  - platform: modbus_controller            # 590 Battery Power
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Power"
-    id: ${id_prefix}esphome_battery_power
-    register_type: holding
-    address: 590
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-
-  - platform: modbus_controller            # 590 Battery Power Charge (internal)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Power Charge"
-    id: ${id_prefix}esphome_battery_power_charge
-    register_type: holding
-    address: 590
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    value_type: S_WORD
-    internal: true
-    lambda: |-
-      if (x > 0) return 0; else return x * -1;
-
-  - platform: modbus_controller            # 590 Battery Power Discharge (internal)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Power Discharge"
-    id: ${id_prefix}esphome_battery_power_discharge
-    register_type: holding
-    address: 590
-    unit_of_measurement: "W"
-    accuracy_decimals: 0
-    device_class: power
-    value_type: S_WORD
-    internal: true
-    lambda: |-
-      if (x < 0) return 0; else return x;
-
-  - platform: modbus_controller            # 591 Battery Current
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Battery Current"
     id: ${id_prefix}esphome_battery_current
     register_type: holding
     address: 591
     unit_of_measurement: "A"
-    accuracy_decimals: 1
-    device_class: current
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 314 Battery Charge Limit Current
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Charge Limit Current"
-    id: ${id_prefix}esphome_battery_charge_limit_current
-    register_type: holding
-    address: 314
-    unit_of_measurement: "A"
-    accuracy_decimals: 1
     device_class: current
     state_class: measurement
     value_type: S_WORD
     filters:
       - multiply: 0.1
 
-  - platform: modbus_controller            # 315 Battery Discharge Limit Current
+  # Split power (correct approach)
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Discharge Limit Current"
-    id: ${id_prefix}esphome_battery_discharge_limit_current
+    name: "${name_prefix}Battery Charge Power"
+    id: ${id_prefix}battery_charge_power
     register_type: holding
-    address: 315
-    unit_of_measurement: "A"
-    accuracy_decimals: 1
-    device_class: current
-    state_class: measurement
+    address: 590
+    unit_of_measurement: "W"
+    device_class: power
     value_type: S_WORD
-    filters:
-      - multiply: 0.1
+    lambda: |-
+      if (x < 0) return -x;
+      return 0;
 
-  - platform: modbus_controller            # 217 Battery Capacity Shutdown
+  - platform: modbus_controller
     modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Capacity Shutdown"
-    id: ${id_prefix}esphome_battery_capacity_shutdown
+    name: "${name_prefix}Battery Discharge Power"
+    id: ${id_prefix}battery_discharge_power
     register_type: holding
-    address: 217
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    device_class: battery
+    address: 590
+    unit_of_measurement: "W"
+    device_class: power
     value_type: S_WORD
-
-  - platform: modbus_controller            # 218 Battery Restart Capacity
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Restart Capacity"
-    id: ${id_prefix}esphome_battery_restart_capacity
-    register_type: holding
-    address: 218
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    device_class: battery
-    value_type: S_WORD
-
-  - platform: modbus_controller            # 219 Battery Low Capacity
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Low Capacity"
-    id: ${id_prefix}esphome_battery_low_capacity
-    register_type: holding
-    address: 219
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    device_class: battery
-    value_type: S_WORD
-
-  - platform: modbus_controller            # 220 Battery Shutdown Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Shutdown voltage"
-    id: ${id_prefix}esphome_battery_shutdown_voltage
-    register_type: holding
-    address: 220
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 221 Battery Restart Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Restart voltage"
-    id: ${id_prefix}esphome_battery_restart_voltage
-    register_type: holding
-    address: 221
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 222 Battery Low Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Low voltage"
-    id: ${id_prefix}esphome_battery_low_voltage
-    register_type: holding
-    address: 222
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 201 Battery Equalization Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Equalization voltage"
-    id: ${id_prefix}esphome_battery_equalisation_voltage
-    register_type: holding
-    address: 201
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 202 Battery Absorption Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Absorption voltage"
-    id: ${id_prefix}esphome_battery_absorbtion_voltage
-    register_type: holding
-    address: 202
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-
-  - platform: modbus_controller            # 203 Battery Float Voltage
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Battery Float voltage"
-    id: ${id_prefix}esphome_battery_float_voltage
-    register_type: holding
-    address: 203
-    unit_of_measurement: "V"
-    accuracy_decimals: 2
-    device_class: voltage
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
+    lambda: |-
+      if (x > 0) return x;
+      return 0;1
 
 ############################################### INVERTER ##############################################
   - platform: modbus_controller            # 633 Inverter Power L1
