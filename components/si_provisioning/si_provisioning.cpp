@@ -20,8 +20,7 @@ namespace si_provisioning {
 
 static const char *const TAG = "si_provisioning";
 
-// Stable hash for our NVS slot. Don't change this across firmware versions.
-static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;  // "SiPro"
+static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;
 
 std::string SiProvisioning::mac_suffix_(uint8_t bytes) const {
   uint8_t mac[6];
@@ -69,9 +68,6 @@ void SiProvisioning::boot_apply() {
 
 void SiProvisioning::loop() {
   if (!portal_active_) return;
-  // DNS hijacking — answer every query with the AP's IP so phones'
-  // captive-portal probes (captive.apple.com, connectivitycheck.gstatic.com,
-  // etc.) all land on us.
   if (dns_ != nullptr) dns_->processNextRequest();
   if (server_ != nullptr) server_->handleClient();
 }
@@ -103,7 +99,7 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
       <option value="">Scanning networks…</option>
     </select>
   </label>
-  <button type="button" class="secondary" onclick="loadNetworks()">Rescan</button>
+  <button type="button" class="secondary" onclick="rescan()">Rescan</button>
   <div id="manual_wrap" style="display:none">
     <label>SSID (manual)<input id="ssid_manual" autocomplete="off"></label>
   </div>
@@ -113,31 +109,39 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
   <button type="submit" onclick="prepSubmit()">Connect</button>
 </form>
 <script>
-function loadNetworks() {
+async function loadNetworks() {
   const sel = document.getElementById('ssid_select');
   sel.innerHTML = '<option value="">Scanning networks…</option>';
-  fetch('/scan').then(r => r.json()).then(nets => {
-    sel.innerHTML = '';
-    nets.sort((a,b) => b.rssi - a.rssi);
-    if (nets.length === 0) {
-      sel.innerHTML = '<option value="__manual__">No networks found — enter manually</option>';
-      onSsidChange();
-      return;
-    }
-    nets.forEach(n => {
-      const o = document.createElement('option');
-      o.value = n.ssid;
-      o.textContent = n.ssid + (n.secure ? ' \u{1F512}' : '') + ' (' + n.rssi + ' dBm)';
-      sel.appendChild(o);
-    });
-    const m = document.createElement('option');
-    m.value = '__manual__';
-    m.textContent = '— Other / hidden network —';
-    sel.appendChild(m);
-  }).catch(() => {
-    sel.innerHTML = '<option value="__manual__">Scan failed — enter manually</option>';
-    onSsidChange();
+  // Poll up to ~14s (7 attempts x 2s) for the async scan to complete.
+  for (let i = 0; i < 7; i++) {
+    try {
+      const r = await fetch('/scan');
+      const nets = await r.json();
+      if (nets.length > 0) { renderNetworks(nets); return; }
+    } catch (e) {}
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  sel.innerHTML = '<option value="__manual__">No networks found — enter manually</option>';
+  onSsidChange();
+}
+function renderNetworks(nets) {
+  const sel = document.getElementById('ssid_select');
+  sel.innerHTML = '';
+  nets.sort((a,b) => b.rssi - a.rssi);
+  nets.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n.ssid;
+    o.textContent = n.ssid + (n.secure ? ' \u{1F512}' : '') + ' (' + n.rssi + ' dBm)';
+    sel.appendChild(o);
   });
+  const m = document.createElement('option');
+  m.value = '__manual__';
+  m.textContent = '— Other / hidden network —';
+  sel.appendChild(m);
+}
+async function rescan() {
+  await fetch('/scan/restart');
+  loadNetworks();
 }
 function onSsidChange() {
   const sel = document.getElementById('ssid_select');
@@ -167,14 +171,8 @@ void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
   ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP — your phone should auto-open the setup page.");
 
-  // NOTE: do NOT call WiFi.mode(WIFI_AP_STA) here — Arduino's WiFi.mode()
-  // internally calls esp_netif_create_default_wifi_ap which asserts when
-  // ESPHome's wifi: ap: block has already created that netif. ESPHome's
-  // AP fallback already runs the chip in APSTA mode, so STA is available
-  // for WiFi.scanNetworks() without our intervention.
-
-  // DNS hijacking — every query returns the AP's IP. This is what
-  // triggers iOS / Android / Windows captive-portal auto-detection.
+  // DNS hijacking — every query returns the AP's IP. Triggers iOS / Android /
+  // Windows captive-portal auto-detection.
   IPAddress ap_ip = WiFi.softAPIP();
   if (ap_ip == IPAddress(0, 0, 0, 0)) ap_ip = IPAddress(192, 168, 4, 1);
   dns_ = new DNSServer();
@@ -182,29 +180,39 @@ void SiProvisioning::start_provisioning_portal_() {
   dns_->start(53, "*", ap_ip);
   ESP_LOGI(TAG, "DNS hijacking active on %s", ap_ip.toString().c_str());
 
-  // HTTP server on port 80 (the port the OS captive-portal probes hit).
+  // Kick off an async WiFi scan now so by the time the captive sheet loads
+  // and the JS calls /scan, results are usually already available.
+  WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/false);
+
   server_ = new WebServer(80);
 
-  auto serve_form = [this]() { this->handle_form_(); };
-
-  // Endpoints that actually do something
+  // Real endpoints (form + scan + provision)
   server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
   server_->on("/scan", HTTP_GET, [this]() { this->handle_scan_(); });
+  server_->on("/scan/restart", HTTP_GET, [this]() {
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true, false);
+    server_->send(200, "application/json", "{\"status\":\"started\"}");
+  });
   server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
 
-  // Captive-portal probe URLs — return the form so the OS shows the popup.
-  server_->on("/generate_204", HTTP_GET, serve_form);          // Android
-  server_->on("/gen_204", HTTP_GET, serve_form);               // Android (older)
-  server_->on("/hotspot-detect.html", HTTP_GET, serve_form);   // iOS / macOS
-  server_->on("/library/test/success.html", HTTP_GET, serve_form);  // iOS variant
-  server_->on("/connecttest.txt", HTTP_GET, serve_form);       // Windows
-  server_->on("/redirect", HTTP_GET, serve_form);              // Windows
-  server_->on("/ncsi.txt", HTTP_GET, serve_form);              // Windows older
-  server_->on("/fwlink/", HTTP_GET, serve_form);               // Microsoft
+  // Captive-portal probe URLs — redirect to canonical portal URL so the OS
+  // captive sheet loads from a stable origin and doesn't flicker.
+  auto redirect_to_portal = [this]() {
+    server_->sendHeader("Location", "http://192.168.4.1/", true);
+    server_->send(302, "text/plain", "");
+  };
+  server_->on("/generate_204", HTTP_GET, redirect_to_portal);          // Android
+  server_->on("/gen_204", HTTP_GET, redirect_to_portal);               // Android (older)
+  server_->on("/hotspot-detect.html", HTTP_GET, redirect_to_portal);   // iOS / macOS
+  server_->on("/library/test/success.html", HTTP_GET, redirect_to_portal);
+  server_->on("/connecttest.txt", HTTP_GET, redirect_to_portal);       // Windows
+  server_->on("/redirect", HTTP_GET, redirect_to_portal);
+  server_->on("/ncsi.txt", HTTP_GET, redirect_to_portal);              // Windows older
+  server_->on("/fwlink/", HTTP_GET, redirect_to_portal);               // Microsoft
 
-  // Catch-all: any other GET goes to the form too. This handles random
-  // probe paths from less common OSes / browsers / VPN apps.
-  server_->onNotFound(serve_form);
+  // Catch-all: redirect any unknown GET to the portal too.
+  server_->onNotFound(redirect_to_portal);
   server_->begin();
 
   portal_active_ = true;
@@ -216,9 +224,15 @@ void SiProvisioning::handle_form_() {
 }
 
 void SiProvisioning::handle_scan_() {
-  ESP_LOGI(TAG, "Starting WiFi scan...");
-  int n = WiFi.scanNetworks(/*async=*/false, /*show_hidden=*/false);
-  ESP_LOGI(TAG, "Scan complete: %d networks", n);
+  // Non-blocking — just polls the current async scan state.
+  // -2 = not started, -1 = in progress, 0+ = result count
+  int n = WiFi.scanComplete();
+  if (n < 0) {
+    // No results yet. Make sure a scan is actually running.
+    if (n == -2) WiFi.scanNetworks(true, false);
+    server_->send(200, "application/json", "[]");
+    return;
+  }
 
   String json = "[";
   for (int i = 0; i < n; i++) {
@@ -235,7 +249,6 @@ void SiProvisioning::handle_scan_() {
     json += "}";
   }
   json += "]";
-  WiFi.scanDelete();
   server_->send(200, "application/json", json);
 }
 
@@ -295,7 +308,6 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
                      "\",\"registration_code\":\"" + reg_code +
                      "\",\"firmware\":\"" ESPHOME_VERSION "\"}";
 
-  // TODO(prod): replace setInsecure() with client.setCACert(ISRG_ROOT_X1).
   WiFiClientSecure client;
   client.setInsecure();
   client.setTimeout(15000);
