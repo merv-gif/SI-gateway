@@ -4,15 +4,12 @@
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/preferences.h"
-#include "esphome/components/wifi/wifi_component.h"
 #include "esphome/components/mqtt/mqtt_client.h"
 #include "esphome/components/json/json_util.h"
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <WebServer.h>
-#include <DNSServer.h>
 #include <string.h>
 
 namespace esphome {
@@ -20,25 +17,8 @@ namespace si_provisioning {
 
 static const char *const TAG = "si_provisioning";
 
-static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;
-
-std::string SiProvisioning::mac_suffix_(uint8_t bytes) const {
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
-  char buf[13];
-  if (bytes == 2) {
-    snprintf(buf, sizeof(buf), "%02X%02X", mac[4], mac[5]);
-  } else {
-    snprintf(buf, sizeof(buf), "%02X%02X%02X", mac[3], mac[4], mac[5]);
-  }
-  return std::string(buf);
-}
-
-std::string SiProvisioning::ap_ssid_() const {
-  return std::string("SI-") +
-         (device_type_ == "pool" ? "Pool" : "Water") +
-         "-Setup-" + this->mac_suffix_(2);
-}
+// Stable hash for our NVS slot. Don't change across firmware versions.
+static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;  // "SiPro"
 
 void SiProvisioning::setup() {
   ESP_LOGI(TAG, "si_provisioning ready (device_type=%s)", device_type_.c_str());
@@ -60,20 +40,27 @@ void SiProvisioning::boot_apply() {
     c->set_topic_prefix(prefix, prefix);
     ESP_LOGI(TAG, "Applied stored MQTT creds (user=%s, prefix=%s)",
              data_.mqtt_user, data_.mqtt_topic_prefix);
+  }
+}
+
+void SiProvisioning::register_with_code(const std::string &code) {
+  if (data_.provisioned) {
+    ESP_LOGW(TAG, "Device already provisioned. Press 'Wipe Provisioning' first to re-register.");
+    return;
+  }
+  if (code.empty()) {
+    ESP_LOGE(TAG, "Empty registration code — type the code first, then press Register.");
     return;
   }
 
-  this->start_provisioning_portal_();
-}
-
-void SiProvisioning::loop() {
-  if (!portal_active_) return;
-  if (dns_ != nullptr) dns_->processNextRequest();
-  if (server_ != nullptr) server_->handleClient();
+  std::string err;
+  if (!perform_registration_(code, err)) {
+    ESP_LOGE(TAG, "Registration failed: %s", err.c_str());
+  }
 }
 
 void SiProvisioning::wipe() {
-  ESP_LOGW(TAG, "Provisioning wiped — rebooting into AP mode");
+  ESP_LOGW(TAG, "Provisioning wiped — rebooting");
   ProvData blank{};
   pref_.save(&blank);
   global_preferences->sync();
@@ -81,219 +68,10 @@ void SiProvisioning::wipe() {
   App.safe_reboot();
 }
 
-static const char PORTAL_HTML[] PROGMEM = R"HTML(
-<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Solaire Intelligence Setup</title>
-<style>
-  body{font-family:-apple-system,sans-serif;max-width:420px;margin:2em auto;padding:0 1em;color:#222}
-  h1{font-size:1.3em}label{display:block;margin-top:1em;font-weight:600}
-  input,select{width:100%;padding:.6em;font-size:1em;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;background:#fff}
-  button{margin-top:1.5em;width:100%;padding:.8em;font-size:1em;background:#0a7;color:#fff;border:0;border-radius:6px}
-  button.secondary{background:#888;margin-top:.6em;padding:.5em;font-size:.9em}
-</style></head><body>
-<h1>Connect this device</h1>
-<p>Pick your WiFi network and enter the registration code from your welcome email.</p>
-<form method="POST" action="/provision">
-  <label>WiFi network
-    <select id="ssid_select" onchange="onSsidChange()">
-      <option value="">Scanning networks…</option>
-    </select>
-  </label>
-  <button type="button" class="secondary" onclick="rescan()">Rescan</button>
-  <div id="manual_wrap" style="display:none">
-    <label>SSID (manual)<input id="ssid_manual" autocomplete="off"></label>
-  </div>
-  <input type="hidden" name="ssid" id="ssid_final">
-  <label>WiFi password<input name="password" type="password" maxlength="64"></label>
-  <label>Registration code<input name="code" required maxlength="32" autocapitalize="characters"></label>
-  <button type="submit" onclick="prepSubmit()">Connect</button>
-</form>
-<script>
-async function loadNetworks() {
-  const sel = document.getElementById('ssid_select');
-  sel.innerHTML = '<option value="">Scanning networks…</option>';
-  // Poll up to ~14s (7 attempts x 2s) for the async scan to complete.
-  for (let i = 0; i < 7; i++) {
-    try {
-      const r = await fetch('/scan');
-      const nets = await r.json();
-      if (nets.length > 0) { renderNetworks(nets); return; }
-    } catch (e) {}
-    await new Promise(r => setTimeout(r, 2000));
-  }
-  sel.innerHTML = '<option value="__manual__">No networks found — enter manually</option>';
-  onSsidChange();
-}
-function renderNetworks(nets) {
-  const sel = document.getElementById('ssid_select');
-  sel.innerHTML = '';
-  nets.sort((a,b) => b.rssi - a.rssi);
-  nets.forEach(n => {
-    const o = document.createElement('option');
-    o.value = n.ssid;
-    o.textContent = n.ssid + (n.secure ? ' \u{1F512}' : '') + ' (' + n.rssi + ' dBm)';
-    sel.appendChild(o);
-  });
-  const m = document.createElement('option');
-  m.value = '__manual__';
-  m.textContent = '— Other / hidden network —';
-  sel.appendChild(m);
-}
-async function rescan() {
-  await fetch('/scan/restart');
-  loadNetworks();
-}
-function onSsidChange() {
-  const sel = document.getElementById('ssid_select');
-  const wrap = document.getElementById('manual_wrap');
-  const manual = document.getElementById('ssid_manual');
-  if (sel.value === '__manual__') {
-    wrap.style.display = '';
-    manual.required = true;
-    manual.focus();
-  } else {
-    wrap.style.display = 'none';
-    manual.required = false;
-  }
-}
-function prepSubmit() {
-  const sel = document.getElementById('ssid_select');
-  const manual = document.getElementById('ssid_manual');
-  const final = document.getElementById('ssid_final');
-  final.value = (sel.value === '__manual__') ? manual.value : sel.value;
-}
-loadNetworks();
-</script>
-</body></html>
-)HTML";
-
-void SiProvisioning::start_provisioning_portal_() {
-  if (portal_active_) return;
-  ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP — your phone should auto-open the setup page.");
-
-  // DNS hijacking — every query returns the AP's IP. Triggers iOS / Android /
-  // Windows captive-portal auto-detection.
-  IPAddress ap_ip = WiFi.softAPIP();
-  if (ap_ip == IPAddress(0, 0, 0, 0)) ap_ip = IPAddress(192, 168, 4, 1);
-  dns_ = new DNSServer();
-  dns_->setErrorReplyCode(DNSReplyCode::NoError);
-  dns_->start(53, "*", ap_ip);
-  ESP_LOGI(TAG, "DNS hijacking active on %s", ap_ip.toString().c_str());
-
-  // Kick off an async WiFi scan now so by the time the captive sheet loads
-  // and the JS calls /scan, results are usually already available.
-  WiFi.scanNetworks(/*async=*/true, /*show_hidden=*/false);
-
-  server_ = new WebServer(80);
-
-  // Real endpoints (form + scan + provision)
-  server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
-  server_->on("/scan", HTTP_GET, [this]() { this->handle_scan_(); });
-  server_->on("/scan/restart", HTTP_GET, [this]() {
-    WiFi.scanDelete();
-    WiFi.scanNetworks(true, false);
-    server_->send(200, "application/json", "{\"status\":\"started\"}");
-  });
-  server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
-
-  // Captive-portal probe URLs — redirect to canonical portal URL so the OS
-  // captive sheet loads from a stable origin and doesn't flicker.
-  auto redirect_to_portal = [this]() {
-    server_->sendHeader("Location", "http://192.168.4.1/", true);
-    server_->send(302, "text/plain", "");
-  };
-  server_->on("/generate_204", HTTP_GET, redirect_to_portal);          // Android
-  server_->on("/gen_204", HTTP_GET, redirect_to_portal);               // Android (older)
-  server_->on("/hotspot-detect.html", HTTP_GET, redirect_to_portal);   // iOS / macOS
-  server_->on("/library/test/success.html", HTTP_GET, redirect_to_portal);
-  server_->on("/connecttest.txt", HTTP_GET, redirect_to_portal);       // Windows
-  server_->on("/redirect", HTTP_GET, redirect_to_portal);
-  server_->on("/ncsi.txt", HTTP_GET, redirect_to_portal);              // Windows older
-  server_->on("/fwlink/", HTTP_GET, redirect_to_portal);               // Microsoft
-
-  // Catch-all: redirect any unknown GET to the portal too.
-  server_->onNotFound(redirect_to_portal);
-  server_->begin();
-
-  portal_active_ = true;
-  portal_started_at_ = millis();
-}
-
-void SiProvisioning::handle_form_() {
-  server_->send_P(200, "text/html", PORTAL_HTML);
-}
-
-void SiProvisioning::handle_scan_() {
-  // Non-blocking — just polls the current async scan state.
-  // -2 = not started, -1 = in progress, 0+ = result count
-  int n = WiFi.scanComplete();
-  if (n < 0) {
-    // No results yet. Make sure a scan is actually running.
-    if (n == -2) WiFi.scanNetworks(true, false);
-    server_->send(200, "application/json", "[]");
-    return;
-  }
-
-  String json = "[";
-  for (int i = 0; i < n; i++) {
-    if (i > 0) json += ",";
-    String ssid = WiFi.SSID(i);
-    ssid.replace("\\", "\\\\");
-    ssid.replace("\"", "\\\"");
-    json += "{\"ssid\":\"";
-    json += ssid;
-    json += "\",\"rssi\":";
-    json += String(WiFi.RSSI(i));
-    json += ",\"secure\":";
-    json += (WiFi.encryptionType(i) != WIFI_AUTH_OPEN) ? "true" : "false";
-    json += "}";
-  }
-  json += "]";
-  server_->send(200, "application/json", json);
-}
-
-void SiProvisioning::handle_provision_() {
-  if (!server_->hasArg("ssid") || !server_->hasArg("code")) {
-    server_->send(400, "text/plain", "Missing fields");
-    return;
-  }
-  std::string ssid = server_->arg("ssid").c_str();
-  std::string pwd = server_->hasArg("password")
-                        ? std::string(server_->arg("password").c_str())
-                        : std::string();
-  std::string code = server_->arg("code").c_str();
-
-  if (ssid.empty()) {
-    server_->send(400, "text/plain", "SSID is empty");
-    return;
-  }
-
-  server_->send(200, "text/html",
-                "<h2>Connecting...</h2><p>This device will reboot in a moment. "
-                "If it doesn't reconnect, you'll see this network again.</p>");
-
-  App.scheduler.set_timeout(this, "register", 500, [this, ssid, pwd, code]() {
-    std::string err;
-    if (!this->perform_registration_(ssid, pwd, code, err)) {
-      ESP_LOGE(TAG, "Registration failed: %s", err.c_str());
-    }
-  });
-}
-
-bool SiProvisioning::perform_registration_(const std::string &ssid,
-                                           const std::string &password,
-                                           const std::string &reg_code,
+bool SiProvisioning::perform_registration_(const std::string &reg_code,
                                            std::string &err_out) {
-  ESP_LOGI(TAG, "Joining %s for registration...", ssid.c_str());
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.begin(ssid.c_str(), password.c_str());
-
-  uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
-    delay(250);
-  }
   if (WiFi.status() != WL_CONNECTED) {
-    err_out = "WiFi join timeout";
+    err_out = "WiFi not connected — set up WiFi first via the captive portal";
     return false;
   }
 
@@ -308,6 +86,10 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
                      "\",\"registration_code\":\"" + reg_code +
                      "\",\"firmware\":\"" ESPHOME_VERSION "\"}";
 
+  ESP_LOGI(TAG, "Registering: code=%s mac=%s endpoint=%s",
+           reg_code.c_str(), mac_str, register_endpoint_.c_str());
+
+  // TODO(prod): replace setInsecure() with client.setCACert(ISRG_ROOT_X1).
   WiFiClientSecure client;
   client.setInsecure();
   client.setTimeout(15000);
@@ -347,15 +129,13 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
     return false;
   }
 
-  this->persist_and_reboot_(user, pass, prefix, ssid, password);
+  this->persist_and_reboot_(user, pass, prefix);
   return true;
 }
 
 void SiProvisioning::persist_and_reboot_(const std::string &user,
                                          const std::string &pass,
-                                         const std::string &topic_prefix,
-                                         const std::string &ssid,
-                                         const std::string &wifi_pass) {
+                                         const std::string &topic_prefix) {
   ESP_LOGI(TAG, "Persisting MQTT creds (user=%s, prefix=%s)",
            user.c_str(), topic_prefix.c_str());
 
@@ -367,8 +147,6 @@ void SiProvisioning::persist_and_reboot_(const std::string &user,
 
   pref_.save(&d);
   global_preferences->sync();
-
-  wifi::global_wifi_component->save_wifi_sta(ssid, wifi_pass);
 
   delay(500);
   ESP_LOGI(TAG, "Rebooting into provisioned mode...");
