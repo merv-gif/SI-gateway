@@ -10,7 +10,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
-#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
 #include <DNSServer.h>
 #include <esp_wifi.h>
 
@@ -67,9 +67,9 @@ void SiProvisioning::boot_apply() {
 }
 
 void SiProvisioning::loop() {
-  if (portal_active_ && dns_ != nullptr) {
-    dns_->processNextRequest();
-  }
+  if (!portal_active_) return;
+  if (dns_ != nullptr) dns_->processNextRequest();
+  if (server_ != nullptr) server_->handleClient();
 }
 
 static const char PORTAL_HTML[] PROGMEM = R"HTML(
@@ -105,42 +105,46 @@ void SiProvisioning::start_provisioning_portal_() {
   dns_->setErrorReplyCode(DNSReplyCode::NoError);
   dns_->start(53, "*", ap_ip);
 
-  server_ = new AsyncWebServer(80);
-  auto serve_form = [](AsyncWebServerRequest *r) {
-    r->send_P(200, "text/html", PORTAL_HTML);
-  };
-  server_->on("/", HTTP_GET, serve_form);
-  server_->on("/generate_204", HTTP_GET, serve_form);
-  server_->on("/hotspot-detect.html", HTTP_GET, serve_form);
-  server_->on("/connecttest.txt", HTTP_GET, serve_form);
-  server_->onNotFound(serve_form);
-
-  server_->on("/provision", HTTP_POST, [this](AsyncWebServerRequest *r) {
-    if (!r->hasParam("ssid", true) || !r->hasParam("code", true)) {
-      r->send(400, "text/plain", "Missing fields");
-      return;
-    }
-    std::string ssid = r->getParam("ssid", true)->value().c_str();
-    std::string pwd = r->hasParam("password", true)
-                         ? r->getParam("password", true)->value().c_str()
-                         : "";
-    std::string code = r->getParam("code", true)->value().c_str();
-
-    r->send(200, "text/html",
-            "<h2>Connecting...</h2><p>This device will reboot in a moment. "
-            "If it doesn't reconnect, you'll see this network again.</p>");
-
-    App.scheduler.set_timeout(this, "register", 500, [this, ssid, pwd, code]() {
-      std::string err;
-      if (!this->perform_registration_(ssid, pwd, code, err)) {
-        ESP_LOGE(TAG, "Registration failed: %s", err.c_str());
-      }
-    });
-  });
-
+  server_ = new WebServer(80);
+  server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
+  // Captive portal probe URLs — return the form for any of them.
+  server_->on("/generate_204", HTTP_GET, [this]() { this->handle_form_(); });
+  server_->on("/hotspot-detect.html", HTTP_GET, [this]() { this->handle_form_(); });
+  server_->on("/connecttest.txt", HTTP_GET, [this]() { this->handle_form_(); });
+  server_->onNotFound([this]() { this->handle_form_(); });
+  server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
   server_->begin();
+
   portal_active_ = true;
   portal_started_at_ = millis();
+}
+
+void SiProvisioning::handle_form_() {
+  server_->send_P(200, "text/html", PORTAL_HTML);
+}
+
+void SiProvisioning::handle_provision_() {
+  if (!server_->hasArg("ssid") || !server_->hasArg("code")) {
+    server_->send(400, "text/plain", "Missing fields");
+    return;
+  }
+  std::string ssid = server_->arg("ssid").c_str();
+  std::string pwd = server_->hasArg("password")
+                        ? std::string(server_->arg("password").c_str())
+                        : std::string();
+  std::string code = server_->arg("code").c_str();
+
+  server_->send(200, "text/html",
+                "<h2>Connecting...</h2><p>This device will reboot in a moment. "
+                "If it doesn't reconnect, you'll see this network again.</p>");
+
+  // Defer heavy work so the response can flush before we tear down WiFi.
+  App.scheduler.set_timeout(this, "register", 500, [this, ssid, pwd, code]() {
+    std::string err;
+    if (!this->perform_registration_(ssid, pwd, code, err)) {
+      ESP_LOGE(TAG, "Registration failed: %s", err.c_str());
+    }
+  });
 }
 
 bool SiProvisioning::perform_registration_(const std::string &ssid,
@@ -197,9 +201,9 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
 
   std::string user, pass, prefix;
   bool ok = json::parse_json(resp.c_str(), [&](JsonObject root) -> bool {
-    if (!root["mqtt_username"].is<const char*>() ||
-        !root["mqtt_password"].is<const char*>() ||
-        !root["topic_prefix"].is<const char*>()) {
+    if (!root["mqtt_username"].is<const char *>() ||
+        !root["mqtt_password"].is<const char *>() ||
+        !root["topic_prefix"].is<const char *>()) {
       return false;
     }
     user = root["mqtt_username"].as<const char *>();
