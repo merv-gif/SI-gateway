@@ -3,11 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 from esphome.core import CORE
 
-# web_server_base is what gives us ESPAsyncWebServer + AsyncTCP. Listing it
-# as a dependency means ESPHome ensures those libs are available with a
-# version compatible with whatever the rest of the firmware is using —
-# avoids version-pin conflicts with the user's web_server: block.
-DEPENDENCIES = ["wifi", "mqtt", "globals", "web_server_base"]
+DEPENDENCIES = ["wifi", "mqtt", "globals"]
 AUTO_LOAD = ["json"]
 
 si_provisioning_ns = cg.esphome_ns.namespace("si_provisioning")
@@ -31,8 +27,7 @@ async def to_code(config):
     cg.add(var.set_device_type(config[CONF_DEVICE_TYPE]))
     cg.add(var.set_register_endpoint(config[CONF_REGISTER_ENDPOINT]))
 
-    # Bundled Arduino-ESP32 libs we use directly. ESPAsyncWebServer + AsyncTCP
-    # come transitively via the web_server_base dependency above.
+    # All bundled with Arduino-ESP32 core — no PIO registry lookups needed.
     if CORE.using_arduino:
         cg.add_library("FS", None)
         cg.add_library("WiFi", None)
@@ -40,3 +35,4 @@ async def to_code(config):
             cg.add_library("HTTPClient", None)
             cg.add_library("WiFiClientSecure", None)
             cg.add_library("DNSServer", None)
+            cg.add_library("WebServer", None)
