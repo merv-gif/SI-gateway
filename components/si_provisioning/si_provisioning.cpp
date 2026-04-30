@@ -55,7 +55,9 @@ void SiProvisioning::boot_apply() {
     auto *c = mqtt::global_mqtt_client;
     c->set_username(mqtt_user->value().c_str());
     c->set_password(mqtt_pass->value().c_str());
-    c->set_topic_prefix(mqtt_topic_prefix->value());
+    // ESPHome 2026.4+ requires (new_prefix, old_prefix_to_clean_up).
+    // We pass the same value for both — nothing to clean up on a fresh boot.
+    c->set_topic_prefix(mqtt_topic_prefix->value(), mqtt_topic_prefix->value());
     ESP_LOGI(TAG, "Applied stored MQTT creds (user=%s, prefix=%s)",
              mqtt_user->value().c_str(),
              mqtt_topic_prefix->value().c_str());
