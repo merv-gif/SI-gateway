@@ -122,4 +122,136 @@ void SiProvisioning::start_provisioning_portal_() {
   };
   server_->on("/", HTTP_GET, serve_form);
   server_->on("/generate_204", HTTP_GET, serve_form);     // Android
-  server_->on("/hotspot-detect.html", HTTP_GET, serve_form);
+  server_->on("/hotspot-detect.html", HTTP_GET, serve_form);  // iOS / macOS
+  server_->on("/connecttest.txt", HTTP_GET, serve_form);  // Windows
+  server_->onNotFound(serve_form);
+
+  server_->on("/provision", HTTP_POST, [this](AsyncWebServerRequest *r) {
+    if (!r->hasParam("ssid", true) || !r->hasParam("code", true)) {
+      r->send(400, "text/plain", "Missing fields");
+      return;
+    }
+    std::string ssid = r->getParam("ssid", true)->value().c_str();
+    std::string pwd = r->hasParam("password", true)
+                         ? r->getParam("password", true)->value().c_str()
+                         : "";
+    std::string code = r->getParam("code", true)->value().c_str();
+
+    r->send(200, "text/html",
+            "<h2>Connecting...</h2><p>This device will reboot in a moment. "
+            "If it doesn't reconnect, you'll see this network again.</p>");
+
+    App.scheduler.set_timeout(this, "register", 500, [this, ssid, pwd, code]() {
+      std::string err;
+      if (!this->perform_registration_(ssid, pwd, code, err)) {
+        ESP_LOGE(TAG, "Registration failed: %s", err.c_str());
+      }
+    });
+  });
+
+  server_->begin();
+  portal_active_ = true;
+  portal_started_at_ = millis();
+}
+
+// -----------------------------------------------------------------------------
+// Registration: connect to user WiFi, POST to backend, persist response
+// -----------------------------------------------------------------------------
+bool SiProvisioning::perform_registration_(const std::string &ssid,
+                                           const std::string &password,
+                                           const std::string &reg_code,
+                                           std::string &err_out) {
+  ESP_LOGI(TAG, "Joining %s for registration...", ssid.c_str());
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.begin(ssid.c_str(), password.c_str());
+
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 20000) {
+    delay(250);
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    err_out = "WiFi join timeout";
+    return false;
+  }
+
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  char mac_str[18];
+  snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  std::string body = "{\"mac\":\"" + std::string(mac_str) +
+                     "\",\"device_type\":\"" + device_type_ +
+                     "\",\"registration_code\":\"" + reg_code +
+                     "\",\"firmware\":\"" ESPHOME_VERSION "\"}";
+
+  WiFiClientSecure client;
+  client.setFingerprint(register_fingerprint_.c_str());
+  client.setTimeout(15000);
+
+  HTTPClient https;
+  if (!https.begin(client, register_endpoint_.c_str())) {
+    err_out = "HTTPS begin failed";
+    return false;
+  }
+  https.addHeader("Content-Type", "application/json");
+
+  int code = https.POST((uint8_t *) body.data(), body.size());
+  if (code != 200) {
+    err_out = "Server returned HTTP " + std::to_string(code);
+    https.end();
+    return false;
+  }
+
+  String resp = https.getString();
+  https.end();
+  ESP_LOGI(TAG, "Registration response: %s", resp.c_str());
+
+  std::string user, pass, prefix;
+  bool ok = json::parse_json(resp.c_str(), [&](JsonObject root) -> bool {
+    if (!root["mqtt_username"].is<const char*>() ||
+        !root["mqtt_password"].is<const char*>() ||
+        !root["topic_prefix"].is<const char*>()) {
+      return false;
+    }
+    user = root["mqtt_username"].as<const char *>();
+    pass = root["mqtt_password"].as<const char *>();
+    prefix = root["topic_prefix"].as<const char *>();
+    return true;
+  });
+  if (!ok || user.empty() || prefix.empty()) {
+    err_out = "Malformed registration response";
+    return false;
+  }
+
+  this->persist_and_reboot_(user, pass, prefix, ssid, password);
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Persist + reboot
+// -----------------------------------------------------------------------------
+void SiProvisioning::persist_and_reboot_(const std::string &user,
+                                         const std::string &pass,
+                                         const std::string &topic_prefix,
+                                         const std::string &ssid,
+                                         const std::string &wifi_pass) {
+  ESP_LOGI(TAG, "Persisting MQTT creds (user=%s, prefix=%s)",
+           user.c_str(), topic_prefix.c_str());
+
+  mqtt_user->value() = user;
+  mqtt_pass->value() = pass;
+  mqtt_topic_prefix->value() = topic_prefix;
+  provisioned->value() = true;
+
+  global_preferences->sync();
+
+  wifi::global_wifi_component->save_wifi_sta(ssid, wifi_pass);
+
+  delay(500);
+  ESP_LOGI(TAG, "Rebooting into provisioned mode...");
+  App.safe_reboot();
+}
+
+}  // namespace si_provisioning
+}  // namespace esphome
