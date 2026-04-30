@@ -11,7 +11,6 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
-#include <DNSServer.h>
 #include <esp_wifi.h>
 
 namespace esphome {
@@ -67,9 +66,9 @@ void SiProvisioning::boot_apply() {
 }
 
 void SiProvisioning::loop() {
-  if (!portal_active_) return;
-  if (dns_ != nullptr) dns_->processNextRequest();
-  if (server_ != nullptr) server_->handleClient();
+  if (portal_active_ && server_ != nullptr) {
+    server_->handleClient();
+  }
 }
 
 static const char PORTAL_HTML[] PROGMEM = R"HTML(
@@ -94,23 +93,15 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
 
 void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
-  ESP_LOGW(TAG, "Starting provisioning AP: %s", this->ap_ssid_().c_str());
+  ESP_LOGW(TAG, "Starting provisioning AP: %s — connect, then visit http://192.168.4.1",
+           this->ap_ssid_().c_str());
 
   WiFi.softAPdisconnect(false);
   WiFi.softAP(this->ap_ssid_().c_str(), "solairesetup");
   delay(100);
 
-  IPAddress ap_ip = WiFi.softAPIP();
-  dns_ = new DNSServer();
-  dns_->setErrorReplyCode(DNSReplyCode::NoError);
-  dns_->start(53, "*", ap_ip);
-
   server_ = new WebServer(80);
   server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
-  // Captive portal probe URLs — return the form for any of them.
-  server_->on("/generate_204", HTTP_GET, [this]() { this->handle_form_(); });
-  server_->on("/hotspot-detect.html", HTTP_GET, [this]() { this->handle_form_(); });
-  server_->on("/connecttest.txt", HTTP_GET, [this]() { this->handle_form_(); });
   server_->onNotFound([this]() { this->handle_form_(); });
   server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
   server_->begin();
@@ -138,7 +129,6 @@ void SiProvisioning::handle_provision_() {
                 "<h2>Connecting...</h2><p>This device will reboot in a moment. "
                 "If it doesn't reconnect, you'll see this network again.</p>");
 
-  // Defer heavy work so the response can flush before we tear down WiFi.
   App.scheduler.set_timeout(this, "register", 500, [this, ssid, pwd, code]() {
     std::string err;
     if (!this->perform_registration_(ssid, pwd, code, err)) {
