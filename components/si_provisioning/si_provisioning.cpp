@@ -185,10 +185,10 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
                      "\",\"registration_code\":\"" + reg_code +
                      "\",\"firmware\":\"" ESPHOME_VERSION "\"}";
 
-  WiFiClientSecure client;
-  client.setFingerprint(register_fingerprint_.c_str());
+ WiFiClientSecure client;
+  client.setCACert(register_ca_cert_.c_str());
   client.setTimeout(15000);
-
+  
   HTTPClient https;
   if (!https.begin(client, register_endpoint_.c_str())) {
     err_out = "HTTPS begin failed";
