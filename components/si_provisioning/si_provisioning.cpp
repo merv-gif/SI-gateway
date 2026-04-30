@@ -70,10 +70,11 @@ void SiProvisioning::wipe() {
 
 bool SiProvisioning::perform_registration_(const std::string &reg_code,
                                            std::string &err_out) {
-  if (WiFi.status() != WL_CONNECTED) {
-    err_out = "WiFi not connected — set up WiFi first via the captive portal";
-    return false;
-  }
+  // We deliberately don't check WiFi.status() — ESPHome bypasses Arduino's
+  // WiFi event handlers and that status can read stale even when the device
+  // is happily on WiFi (which it must be, since this is triggered from a
+  // button on web_server). If WiFi is genuinely down, https.begin() below
+  // will fail with a meaningful error.
 
   uint8_t mac[6];
   WiFi.macAddress(mac);
