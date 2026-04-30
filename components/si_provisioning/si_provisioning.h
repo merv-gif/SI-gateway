@@ -10,26 +10,16 @@ class DNSServer;
 namespace esphome {
 namespace si_provisioning {
 
-// Owns the AP-mode captive portal (SSID + password + registration code form),
-// performs the pinned-TLS POST to the registration endpoint, persists the
-// returned MQTT credentials, and (at boot) pushes those credentials into the
-// global MQTT client *before* it connects.
 class SiProvisioning : public Component {
  public:
   void setup() override;
   void loop() override;
-  // Run before mqtt (AFTER_WIFI = 100). Globals restore at ~1000 so we still
-  // see the persisted creds.
   float get_setup_priority() const override { return 250.0f; }
 
   void set_device_type(const std::string &v) { device_type_ = v; }
   void set_register_endpoint(const std::string &v) { register_endpoint_ = v; }
-  void set_register_fingerprint(const std::string &v) { register_fingerprint_ = v; }
+  void set_register_ca_cert(const std::string &v) { register_ca_cert_ = v; }
 
-  // Called from on_boot lambda. Reads globals and either:
-  //   - applies stored creds to the global MQTT client and lets normal boot
-  //     proceed, OR
-  //   - starts the AP + provisioning web server and disables MQTT for now.
   void boot_apply();
 
  protected:
@@ -43,4 +33,18 @@ class SiProvisioning : public Component {
                            const std::string &topic_prefix,
                            const std::string &ssid,
                            const std::string &wifi_pass);
-  std::string mac_suffix_(
+  std::string mac_suffix_(uint8_t bytes) const;
+  std::string ap_ssid_() const;
+
+  std::string device_type_;
+  std::string register_endpoint_;
+  std::string register_ca_cert_;
+
+  AsyncWebServer *server_{nullptr};
+  DNSServer *dns_{nullptr};
+  bool portal_active_{false};
+  uint32_t portal_started_at_{0};
+};
+
+}  // namespace si_provisioning
+}  // namespace esphome
