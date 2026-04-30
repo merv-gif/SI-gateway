@@ -3,31 +3,29 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 #include "esphome/core/hal.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/wifi/wifi_component.h"
 #include "esphome/components/mqtt/mqtt_client.h"
 #include "esphome/components/json/json_util.h"
-#include "esphome/components/globals/globals_component.h"
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
-
-namespace esphome {
-extern globals::RestoringGlobalsComponent<std::string> *mqtt_user;
-extern globals::RestoringGlobalsComponent<std::string> *mqtt_pass;
-extern globals::RestoringGlobalsComponent<std::string> *mqtt_topic_prefix;
-extern globals::RestoringGlobalsComponent<bool> *provisioned;
-}  // namespace esphome
+#include <string.h>
 
 namespace esphome {
 namespace si_provisioning {
 
 static const char *const TAG = "si_provisioning";
 
+// Stable hash for our NVS slot. Don't change this across firmware versions
+// or you'll orphan provisioned devices in the field.
+static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;  // "SiPro"
+
 std::string SiProvisioning::mac_suffix_(uint8_t bytes) const {
   uint8_t mac[6];
-  WiFi.macAddress(mac);  // STA MAC, available without ESP-IDF headers
+  WiFi.macAddress(mac);
   char buf[13];
   if (bytes == 2) {
     snprintf(buf, sizeof(buf), "%02X%02X", mac[4], mac[5]);
@@ -48,19 +46,25 @@ void SiProvisioning::setup() {
 }
 
 void SiProvisioning::boot_apply() {
-  const bool is_provisioned = provisioned->value();
-  ESP_LOGI(TAG, "boot_apply: provisioned=%s", is_provisioned ? "true" : "false");
+  // Initialise preference handle and load saved state. Doing it here (rather
+  // than in setup) avoids any ordering ambiguity between component setup()
+  // and on_boot lambda execution at the same priority.
+  pref_ = global_preferences->make_preference<ProvData>(SI_PROV_PREF_HASH);
+  if (!pref_.load(&data_)) {
+    data_ = ProvData{};
+  }
 
-  if (is_provisioned && !mqtt_user->value().empty()) {
+  ESP_LOGI(TAG, "boot_apply: provisioned=%s", data_.provisioned ? "true" : "false");
+
+  if (data_.provisioned && data_.mqtt_user[0] != '\0') {
     auto *c = mqtt::global_mqtt_client;
-    c->set_username(mqtt_user->value().c_str());
-    c->set_password(mqtt_pass->value().c_str());
-    // ESPHome 2026.4+ requires (new_prefix, old_prefix_to_clean_up).
-    // We pass the same value for both — nothing to clean up on a fresh boot.
-    c->set_topic_prefix(mqtt_topic_prefix->value(), mqtt_topic_prefix->value());
+    c->set_username(data_.mqtt_user);
+    c->set_password(data_.mqtt_pass);
+    std::string prefix(data_.mqtt_topic_prefix);
+    // ESPHome 2026.4+ takes (new_prefix, old_prefix_to_clean_up).
+    c->set_topic_prefix(prefix, prefix);
     ESP_LOGI(TAG, "Applied stored MQTT creds (user=%s, prefix=%s)",
-             mqtt_user->value().c_str(),
-             mqtt_topic_prefix->value().c_str());
+             data_.mqtt_user, data_.mqtt_topic_prefix);
     return;
   }
 
@@ -71,6 +75,15 @@ void SiProvisioning::loop() {
   if (portal_active_ && server_ != nullptr) {
     server_->handleClient();
   }
+}
+
+void SiProvisioning::wipe() {
+  ESP_LOGW(TAG, "Provisioning wiped — rebooting into AP mode");
+  ProvData blank{};
+  pref_.save(&blank);
+  global_preferences->sync();
+  delay(500);
+  App.safe_reboot();
 }
 
 static const char PORTAL_HTML[] PROGMEM = R"HTML(
@@ -220,11 +233,13 @@ void SiProvisioning::persist_and_reboot_(const std::string &user,
   ESP_LOGI(TAG, "Persisting MQTT creds (user=%s, prefix=%s)",
            user.c_str(), topic_prefix.c_str());
 
-  mqtt_user->value() = user;
-  mqtt_pass->value() = pass;
-  mqtt_topic_prefix->value() = topic_prefix;
-  provisioned->value() = true;
+  ProvData d{};
+  d.provisioned = true;
+  strncpy(d.mqtt_user, user.c_str(), sizeof(d.mqtt_user) - 1);
+  strncpy(d.mqtt_pass, pass.c_str(), sizeof(d.mqtt_pass) - 1);
+  strncpy(d.mqtt_topic_prefix, topic_prefix.c_str(), sizeof(d.mqtt_topic_prefix) - 1);
 
+  pref_.save(&d);
   global_preferences->sync();
 
   wifi::global_wifi_component->save_wifi_sta(ssid, wifi_pass);
