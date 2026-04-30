@@ -108,14 +108,14 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
 
 void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
-  ESP_LOGW(TAG, "Starting provisioning AP: %s — connect, then visit http://192.168.4.1",
-           this->ap_ssid_().c_str());
+  ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP, then open http://192.168.4.1:8080/");
 
-  WiFi.softAPdisconnect(false);
-  WiFi.softAP(this->ap_ssid_().c_str(), "solairesetup");
-  delay(100);
-
-  server_ = new WebServer(80);
+  // The AP is brought up by ESPHome's wifi: ap: fallback block. Calling
+  // WiFi.softAP() here would try to re-create the AP netif and trigger
+  // assert failed: esp_netif_create_default_wifi_ap in ESP-IDF.
+  //
+  // Port 8080 (not 80) to avoid colliding with the web_server: component.
+  server_ = new WebServer(8080);
   server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
   server_->onNotFound([this]() { this->handle_form_(); });
   server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
