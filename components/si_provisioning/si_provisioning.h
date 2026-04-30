@@ -10,8 +10,7 @@ namespace esphome {
 namespace si_provisioning {
 
 // Persisted state. Fixed sizes keep this a POD so ESPHome's preferences
-// API can serialise it as a single blob. Bump the field sizes if you ever
-// see a real broker username/password/topic-prefix that exceeds these.
+// API can serialise it as a single blob.
 struct ProvData {
   bool provisioned;
   char mqtt_user[64];
@@ -34,6 +33,7 @@ class SiProvisioning : public Component {
  protected:
   void start_provisioning_portal_();
   void handle_form_();
+  void handle_scan_();
   void handle_provision_();
   bool perform_registration_(const std::string &ssid,
                              const std::string &password,
