@@ -46,9 +46,6 @@ void SiProvisioning::setup() {
 }
 
 void SiProvisioning::boot_apply() {
-  // Initialise preference handle and load saved state. Doing it here (rather
-  // than in setup) avoids any ordering ambiguity between component setup()
-  // and on_boot lambda execution at the same priority.
   pref_ = global_preferences->make_preference<ProvData>(SI_PROV_PREF_HASH);
   if (!pref_.load(&data_)) {
     data_ = ProvData{};
@@ -61,7 +58,6 @@ void SiProvisioning::boot_apply() {
     c->set_username(data_.mqtt_user);
     c->set_password(data_.mqtt_pass);
     std::string prefix(data_.mqtt_topic_prefix);
-    // ESPHome 2026.4+ takes (new_prefix, old_prefix_to_clean_up).
     c->set_topic_prefix(prefix, prefix);
     ESP_LOGI(TAG, "Applied stored MQTT creds (user=%s, prefix=%s)",
              data_.mqtt_user, data_.mqtt_topic_prefix);
@@ -92,17 +88,76 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
 <style>
   body{font-family:-apple-system,sans-serif;max-width:420px;margin:2em auto;padding:0 1em;color:#222}
   h1{font-size:1.3em}label{display:block;margin-top:1em;font-weight:600}
-  input{width:100%;padding:.6em;font-size:1em;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+  input,select{width:100%;padding:.6em;font-size:1em;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;background:#fff}
   button{margin-top:1.5em;width:100%;padding:.8em;font-size:1em;background:#0a7;color:#fff;border:0;border-radius:6px}
+  button.secondary{background:#888;margin-top:.6em;padding:.5em;font-size:.9em}
+  .hint{font-size:.85em;color:#666;margin-top:.3em}
 </style></head><body>
 <h1>Connect this device</h1>
-<p>Enter your WiFi details and the registration code from your welcome email.</p>
+<p>Pick your WiFi network and enter the registration code from your welcome email.</p>
 <form method="POST" action="/provision">
-  <label>WiFi network<input name="ssid" required maxlength="32"></label>
+  <label>WiFi network
+    <select id="ssid_select" onchange="onSsidChange()">
+      <option value="">Scanning networks…</option>
+    </select>
+  </label>
+  <button type="button" class="secondary" onclick="loadNetworks()">Rescan</button>
+  <div id="manual_wrap" style="display:none">
+    <label>SSID (manual)<input id="ssid_manual" autocomplete="off"></label>
+  </div>
+  <input type="hidden" name="ssid" id="ssid_final">
   <label>WiFi password<input name="password" type="password" maxlength="64"></label>
   <label>Registration code<input name="code" required maxlength="32" autocapitalize="characters"></label>
-  <button type="submit">Connect</button>
+  <button type="submit" onclick="prepSubmit()">Connect</button>
 </form>
+<script>
+function loadNetworks() {
+  const sel = document.getElementById('ssid_select');
+  sel.innerHTML = '<option value="">Scanning networks…</option>';
+  fetch('/scan').then(r => r.json()).then(nets => {
+    sel.innerHTML = '';
+    nets.sort((a,b) => b.rssi - a.rssi);
+    if (nets.length === 0) {
+      sel.innerHTML = '<option value="__manual__">No networks found — enter manually</option>';
+      onSsidChange();
+      return;
+    }
+    nets.forEach(n => {
+      const o = document.createElement('option');
+      o.value = n.ssid;
+      o.textContent = n.ssid + (n.secure ? ' \u{1F512}' : '') + ' (' + n.rssi + ' dBm)';
+      sel.appendChild(o);
+    });
+    const m = document.createElement('option');
+    m.value = '__manual__';
+    m.textContent = '— Other / hidden network —';
+    sel.appendChild(m);
+  }).catch(() => {
+    sel.innerHTML = '<option value="__manual__">Scan failed — enter manually</option>';
+    onSsidChange();
+  });
+}
+function onSsidChange() {
+  const sel = document.getElementById('ssid_select');
+  const wrap = document.getElementById('manual_wrap');
+  const manual = document.getElementById('ssid_manual');
+  if (sel.value === '__manual__') {
+    wrap.style.display = '';
+    manual.required = true;
+    manual.focus();
+  } else {
+    wrap.style.display = 'none';
+    manual.required = false;
+  }
+}
+function prepSubmit() {
+  const sel = document.getElementById('ssid_select');
+  const manual = document.getElementById('ssid_manual');
+  const final = document.getElementById('ssid_final');
+  final.value = (sel.value === '__manual__') ? manual.value : sel.value;
+}
+loadNetworks();
+</script>
 </body></html>
 )HTML";
 
@@ -110,15 +165,15 @@ void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
   ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP, then open http://192.168.4.1:8080/");
 
-  // The AP is brought up by ESPHome's wifi: ap: fallback block. Calling
-  // WiFi.softAP() here would try to re-create the AP netif and trigger
-  // assert failed: esp_netif_create_default_wifi_ap in ESP-IDF.
-  //
-  // Port 8080 (not 80) to avoid colliding with the web_server: component.
+  // Ensure STA mode is enabled so WiFi.scanNetworks() works while the AP
+  // (managed by ESPHome's wifi: ap: fallback) stays up.
+  WiFi.mode(WIFI_AP_STA);
+
   server_ = new WebServer(8080);
   server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
-  server_->onNotFound([this]() { this->handle_form_(); });
+  server_->on("/scan", HTTP_GET, [this]() { this->handle_scan_(); });
   server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
+  server_->onNotFound([this]() { this->handle_form_(); });
   server_->begin();
 
   portal_active_ = true;
@@ -127,6 +182,33 @@ void SiProvisioning::start_provisioning_portal_() {
 
 void SiProvisioning::handle_form_() {
   server_->send_P(200, "text/html", PORTAL_HTML);
+}
+
+void SiProvisioning::handle_scan_() {
+  ESP_LOGI(TAG, "Starting WiFi scan...");
+  // Synchronous scan — blocks ~3-4s. Acceptable for a one-shot captive portal call.
+  // show_hidden=false so we don't pollute the UI with empty SSIDs.
+  int n = WiFi.scanNetworks(/*async=*/false, /*show_hidden=*/false);
+  ESP_LOGI(TAG, "Scan complete: %d networks", n);
+
+  String json = "[";
+  for (int i = 0; i < n; i++) {
+    if (i > 0) json += ",";
+    String ssid = WiFi.SSID(i);
+    // Minimal JSON-string escaping for SSID
+    ssid.replace("\\", "\\\\");
+    ssid.replace("\"", "\\\"");
+    json += "{\"ssid\":\"";
+    json += ssid;
+    json += "\",\"rssi\":";
+    json += String(WiFi.RSSI(i));
+    json += ",\"secure\":";
+    json += (WiFi.encryptionType(i) != WIFI_AUTH_OPEN) ? "true" : "false";
+    json += "}";
+  }
+  json += "]";
+  WiFi.scanDelete();
+  server_->send(200, "application/json", json);
 }
 
 void SiProvisioning::handle_provision_() {
@@ -139,6 +221,11 @@ void SiProvisioning::handle_provision_() {
                         ? std::string(server_->arg("password").c_str())
                         : std::string();
   std::string code = server_->arg("code").c_str();
+
+  if (ssid.empty()) {
+    server_->send(400, "text/plain", "SSID is empty");
+    return;
+  }
 
   server_->send(200, "text/html",
                 "<h2>Connecting...</h2><p>This device will reboot in a moment. "
