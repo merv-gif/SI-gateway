@@ -5,12 +5,11 @@
 #include <string>
 
 class WebServer;
+class DNSServer;
 
 namespace esphome {
 namespace si_provisioning {
 
-// Persisted state. Fixed sizes keep this a POD so ESPHome's preferences
-// API can serialise it as a single blob.
 struct ProvData {
   bool provisioned;
   char mqtt_user[64];
@@ -28,7 +27,7 @@ class SiProvisioning : public Component {
   void set_register_endpoint(const std::string &v) { register_endpoint_ = v; }
 
   void boot_apply();
-  void wipe();   // Clear stored creds and reboot into AP mode
+  void wipe();
 
  protected:
   void start_provisioning_portal_();
@@ -54,6 +53,7 @@ class SiProvisioning : public Component {
   ProvData data_{};
 
   WebServer *server_{nullptr};
+  DNSServer *dns_{nullptr};
   bool portal_active_{false};
   uint32_t portal_started_at_{0};
 };
