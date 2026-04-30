@@ -167,8 +167,11 @@ void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
   ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP — your phone should auto-open the setup page.");
 
-  // Ensure STA is enabled so WiFi.scanNetworks() works while AP stays up.
-  WiFi.mode(WIFI_AP_STA);
+  // NOTE: do NOT call WiFi.mode(WIFI_AP_STA) here — Arduino's WiFi.mode()
+  // internally calls esp_netif_create_default_wifi_ap which asserts when
+  // ESPHome's wifi: ap: block has already created that netif. ESPHome's
+  // AP fallback already runs the chip in APSTA mode, so STA is available
+  // for WiFi.scanNetworks() without our intervention.
 
   // DNS hijacking — every query returns the AP's IP. This is what
   // triggers iOS / Android / Windows captive-portal auto-detection.
