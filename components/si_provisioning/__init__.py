@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 from esphome.core import CORE
 
-DEPENDENCIES = ["wifi", "mqtt", "globals"]
+DEPENDENCIES = ["wifi", "mqtt"]
 AUTO_LOAD = ["json"]
 
 si_provisioning_ns = cg.esphome_ns.namespace("si_provisioning")
