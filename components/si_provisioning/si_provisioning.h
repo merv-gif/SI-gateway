@@ -9,6 +9,16 @@ class WebServer;
 namespace esphome {
 namespace si_provisioning {
 
+// Persisted state. Fixed sizes keep this a POD so ESPHome's preferences
+// API can serialise it as a single blob. Bump the field sizes if you ever
+// see a real broker username/password/topic-prefix that exceeds these.
+struct ProvData {
+  bool provisioned;
+  char mqtt_user[64];
+  char mqtt_pass[64];
+  char mqtt_topic_prefix[64];
+};
+
 class SiProvisioning : public Component {
  public:
   void setup() override;
@@ -19,6 +29,7 @@ class SiProvisioning : public Component {
   void set_register_endpoint(const std::string &v) { register_endpoint_ = v; }
 
   void boot_apply();
+  void wipe();   // Clear stored creds and reboot into AP mode
 
  protected:
   void start_provisioning_portal_();
@@ -38,6 +49,9 @@ class SiProvisioning : public Component {
 
   std::string device_type_;
   std::string register_endpoint_;
+
+  ESPPreferenceObject pref_;
+  ProvData data_{};
 
   WebServer *server_{nullptr};
   bool portal_active_{false};
