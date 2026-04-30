@@ -27,6 +27,7 @@ async def to_code(config):
     cg.add(var.set_device_type(config[CONF_DEVICE_TYPE]))
     cg.add(var.set_register_endpoint(config[CONF_REGISTER_ENDPOINT]))
 
+    # All bundled with Arduino-ESP32 core. AsyncUDP is required by DNSServer.
     if CORE.using_arduino:
         cg.add_library("FS", None)
         cg.add_library("WiFi", None)
@@ -34,3 +35,5 @@ async def to_code(config):
             cg.add_library("HTTPClient", None)
             cg.add_library("WiFiClientSecure", None)
             cg.add_library("WebServer", None)
+            cg.add_library("AsyncUDP", None)
+            cg.add_library("DNSServer", None)
