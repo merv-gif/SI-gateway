@@ -12,6 +12,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 #include <string.h>
 
 namespace esphome {
@@ -19,8 +20,7 @@ namespace si_provisioning {
 
 static const char *const TAG = "si_provisioning";
 
-// Stable hash for our NVS slot. Don't change this across firmware versions
-// or you'll orphan provisioned devices in the field.
+// Stable hash for our NVS slot. Don't change this across firmware versions.
 static constexpr uint32_t SI_PROV_PREF_HASH = 0x5170526Fu;  // "SiPro"
 
 std::string SiProvisioning::mac_suffix_(uint8_t bytes) const {
@@ -68,9 +68,12 @@ void SiProvisioning::boot_apply() {
 }
 
 void SiProvisioning::loop() {
-  if (portal_active_ && server_ != nullptr) {
-    server_->handleClient();
-  }
+  if (!portal_active_) return;
+  // DNS hijacking — answer every query with the AP's IP so phones'
+  // captive-portal probes (captive.apple.com, connectivitycheck.gstatic.com,
+  // etc.) all land on us.
+  if (dns_ != nullptr) dns_->processNextRequest();
+  if (server_ != nullptr) server_->handleClient();
 }
 
 void SiProvisioning::wipe() {
@@ -91,7 +94,6 @@ static const char PORTAL_HTML[] PROGMEM = R"HTML(
   input,select{width:100%;padding:.6em;font-size:1em;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;background:#fff}
   button{margin-top:1.5em;width:100%;padding:.8em;font-size:1em;background:#0a7;color:#fff;border:0;border-radius:6px}
   button.secondary{background:#888;margin-top:.6em;padding:.5em;font-size:.9em}
-  .hint{font-size:.85em;color:#666;margin-top:.3em}
 </style></head><body>
 <h1>Connect this device</h1>
 <p>Pick your WiFi network and enter the registration code from your welcome email.</p>
@@ -163,17 +165,43 @@ loadNetworks();
 
 void SiProvisioning::start_provisioning_portal_() {
   if (portal_active_) return;
-  ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP, then open http://192.168.4.1:8080/");
+  ESP_LOGW(TAG, "Provisioning portal active. Connect to the AP — your phone should auto-open the setup page.");
 
-  // Ensure STA mode is enabled so WiFi.scanNetworks() works while the AP
-  // (managed by ESPHome's wifi: ap: fallback) stays up.
+  // Ensure STA is enabled so WiFi.scanNetworks() works while AP stays up.
   WiFi.mode(WIFI_AP_STA);
 
-  server_ = new WebServer(8080);
+  // DNS hijacking — every query returns the AP's IP. This is what
+  // triggers iOS / Android / Windows captive-portal auto-detection.
+  IPAddress ap_ip = WiFi.softAPIP();
+  if (ap_ip == IPAddress(0, 0, 0, 0)) ap_ip = IPAddress(192, 168, 4, 1);
+  dns_ = new DNSServer();
+  dns_->setErrorReplyCode(DNSReplyCode::NoError);
+  dns_->start(53, "*", ap_ip);
+  ESP_LOGI(TAG, "DNS hijacking active on %s", ap_ip.toString().c_str());
+
+  // HTTP server on port 80 (the port the OS captive-portal probes hit).
+  server_ = new WebServer(80);
+
+  auto serve_form = [this]() { this->handle_form_(); };
+
+  // Endpoints that actually do something
   server_->on("/", HTTP_GET, [this]() { this->handle_form_(); });
   server_->on("/scan", HTTP_GET, [this]() { this->handle_scan_(); });
   server_->on("/provision", HTTP_POST, [this]() { this->handle_provision_(); });
-  server_->onNotFound([this]() { this->handle_form_(); });
+
+  // Captive-portal probe URLs — return the form so the OS shows the popup.
+  server_->on("/generate_204", HTTP_GET, serve_form);          // Android
+  server_->on("/gen_204", HTTP_GET, serve_form);               // Android (older)
+  server_->on("/hotspot-detect.html", HTTP_GET, serve_form);   // iOS / macOS
+  server_->on("/library/test/success.html", HTTP_GET, serve_form);  // iOS variant
+  server_->on("/connecttest.txt", HTTP_GET, serve_form);       // Windows
+  server_->on("/redirect", HTTP_GET, serve_form);              // Windows
+  server_->on("/ncsi.txt", HTTP_GET, serve_form);              // Windows older
+  server_->on("/fwlink/", HTTP_GET, serve_form);               // Microsoft
+
+  // Catch-all: any other GET goes to the form too. This handles random
+  // probe paths from less common OSes / browsers / VPN apps.
+  server_->onNotFound(serve_form);
   server_->begin();
 
   portal_active_ = true;
@@ -186,8 +214,6 @@ void SiProvisioning::handle_form_() {
 
 void SiProvisioning::handle_scan_() {
   ESP_LOGI(TAG, "Starting WiFi scan...");
-  // Synchronous scan — blocks ~3-4s. Acceptable for a one-shot captive portal call.
-  // show_hidden=false so we don't pollute the UI with empty SSIDs.
   int n = WiFi.scanNetworks(/*async=*/false, /*show_hidden=*/false);
   ESP_LOGI(TAG, "Scan complete: %d networks", n);
 
@@ -195,7 +221,6 @@ void SiProvisioning::handle_scan_() {
   for (int i = 0; i < n; i++) {
     if (i > 0) json += ",";
     String ssid = WiFi.SSID(i);
-    // Minimal JSON-string escaping for SSID
     ssid.replace("\\", "\\\\");
     ssid.replace("\"", "\\\"");
     json += "{\"ssid\":\"";
@@ -267,8 +292,7 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
                      "\",\"registration_code\":\"" + reg_code +
                      "\",\"firmware\":\"" ESPHOME_VERSION "\"}";
 
-  // TODO(prod): replace setInsecure() with client.setCACert(ISRG_ROOT_X1)
-  // before customer rollout. Bench tests run without TLS validation.
+  // TODO(prod): replace setInsecure() with client.setCACert(ISRG_ROOT_X1).
   WiFiClientSecure client;
   client.setInsecure();
   client.setTimeout(15000);
