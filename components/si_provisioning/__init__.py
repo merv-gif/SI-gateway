@@ -10,14 +10,14 @@ SiProvisioning = si_provisioning_ns.class_("SiProvisioning", cg.Component)
 
 CONF_DEVICE_TYPE = "device_type"
 CONF_REGISTER_ENDPOINT = "register_endpoint"
-CONF_REGISTER_FINGERPRINT = "register_fingerprint"
+CONF_REGISTER_CA_CERT = "register_ca_cert"
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(SiProvisioning),
         cv.Required(CONF_DEVICE_TYPE): cv.one_of("pool", "water", lower=True),
         cv.Required(CONF_REGISTER_ENDPOINT): cv.url,
-        cv.Required(CONF_REGISTER_FINGERPRINT): cv.string_strict,
+        cv.Required(CONF_REGISTER_CA_CERT): cv.string_strict,
     }
 ).extend(cv.COMPONENT_SCHEMA)
 
@@ -27,6 +27,6 @@ async def to_code(config):
     await cg.register_component(var, config)
     cg.add(var.set_device_type(config[CONF_DEVICE_TYPE]))
     cg.add(var.set_register_endpoint(config[CONF_REGISTER_ENDPOINT]))
-    cg.add(var.set_register_fingerprint(config[CONF_REGISTER_FINGERPRINT]))
+    cg.add(var.set_register_ca_cert(config[CONF_REGISTER_CA_CERT]))
     cg.add_library("ESP Async WebServer", None)
     cg.add_library("DNSServer", None)
