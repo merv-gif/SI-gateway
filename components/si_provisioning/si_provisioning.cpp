@@ -6,12 +6,12 @@
 #include "esphome/components/wifi/wifi_component.h"
 #include "esphome/components/mqtt/mqtt_client.h"
 #include "esphome/components/json/json_util.h"
+#include "esphome/components/globals/globals_component.h"
 
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <WebServer.h>
-#include <esp_wifi.h>
 
 namespace esphome {
 extern globals::RestoringGlobalsComponent<std::string> *mqtt_user;
@@ -27,7 +27,7 @@ static const char *const TAG = "si_provisioning";
 
 std::string SiProvisioning::mac_suffix_(uint8_t bytes) const {
   uint8_t mac[6];
-  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  WiFi.macAddress(mac);  // STA MAC, available without ESP-IDF headers
   char buf[13];
   if (bytes == 2) {
     snprintf(buf, sizeof(buf), "%02X%02X", mac[4], mac[5]);
@@ -155,7 +155,7 @@ bool SiProvisioning::perform_registration_(const std::string &ssid,
   }
 
   uint8_t mac[6];
-  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  WiFi.macAddress(mac);
   char mac_str[18];
   snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
