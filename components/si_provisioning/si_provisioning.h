@@ -18,7 +18,6 @@ class SiProvisioning : public Component {
 
   void set_device_type(const std::string &v) { device_type_ = v; }
   void set_register_endpoint(const std::string &v) { register_endpoint_ = v; }
-  void set_register_ca_cert(const std::string &v) { register_ca_cert_ = v; }
 
   void boot_apply();
 
@@ -38,7 +37,6 @@ class SiProvisioning : public Component {
 
   std::string device_type_;
   std::string register_endpoint_;
-  std::string register_ca_cert_;
 
   AsyncWebServer *server_{nullptr};
   DNSServer *dns_{nullptr};
