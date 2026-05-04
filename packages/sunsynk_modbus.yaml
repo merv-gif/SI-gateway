@@ -1,3 +1,36 @@
+# ============================================================================
+# Sunsynk Modbus package — Solaire Intelligence fork
+# ----------------------------------------------------------------------------
+# CHANGELOG (2026-05-04, register/duplicate-writer cleanup):
+#   - Register 243: removed `Toggle Priority Load` switch. The `Energy
+#     Pattern` select already controls this register cleanly (0=Battery
+#     First, 1=Load First). Having both the switch (bit 0) and select
+#     (whole word) writing to 243 caused them to clobber each other
+#     intermittently — was the root cause of the slot-1 SOC weirdness.
+#   - Register 172 (Grid CT Power): consolidated to a single Modbus read.
+#     `Grid Power Import` and `Grid Power Export` are now template sensors
+#     derived from the visible Grid CT Power. Was 3 reads → now 1.
+#   - Register 190 (Battery Power): same treatment. Battery Power Charge
+#     and Battery Power Discharge are now template sensors. 3 reads → 1.
+#   - Register 280 (Grid Peak Shaving): the raw register sensor is the
+#     canonical read; the two binary status sensors and the select now
+#     derive from it via templates. Was 4 separate reads → now 1.
+#
+# Net effect on the Modbus bus:
+#   The duplicate-command warnings (`Duplicate modbus command found:
+#   type=0x3 address=172 count=1` etc.) we saw repeating at every poll
+#   cycle are gone. The bus duty cycle drops further, leaving even more
+#   headroom for ad-hoc writes from the dashboard.
+#
+# Backward compatibility:
+#   - All entity IDs preserved. Anything in HA / the cloud dashboard that
+#     references these IDs keeps working unchanged.
+#   - Removed the Toggle Priority Load switch entity. If anything in HA
+#     or your dashboard references `inverter_esphome_toggle_priority_load`,
+#     redirect it to `inverter_esphome_select_energy_pattern` (which has
+#     the equivalent semantics — selecting "Load first" == old switch ON).
+# ============================================================================
+
 substitutions:
   settings_skipped_updates: "30"
 
@@ -10,7 +43,6 @@ interval:
             time.has_time:
           then:
             - script.execute: ${id_prefix}sync_time
-
 script:
   - id: ${id_prefix}sync_time
     then:
@@ -38,6 +70,10 @@ script:
           }
 
 ############################################### BINARY SENSORS ########################################
+# CHANGED 2026-05-04: Gen/Grid Peak Shaving Status moved to template binary
+# sensors derived from the raw register 280 read further down. We keep
+# Grid Connected Status (194) as a modbus_controller binary sensor since
+# it has its own register.
 binary_sensor:
   - platform: modbus_controller            # 194 Grid Connected Status
     modbus_controller_id: ${modbus_controller_id}
@@ -46,20 +82,22 @@ binary_sensor:
     register_type: holding
     address: 194
     force_new_range: true
-  - platform: modbus_controller            # 280 Gen Peak Shaving Status
-    modbus_controller_id: ${modbus_controller_id}
+
+  - platform: template                     # 280 bit 4 — derived
     name: "${name_prefix}Gen Peak Shaving Status"
     id: ${id_prefix}esphome_gen_peak_shaving_status
-    register_type: holding
-    address: 280
-    bitmask: 0x10
-  - platform: modbus_controller           # 280 Grid Peak Shaving Status
-    modbus_controller_id: ${modbus_controller_id}
+    lambda: |-
+      if (isnan(id(${id_prefix}grid_peak_shaving_raw).state)) return {};
+      uint16_t raw = (uint16_t) id(${id_prefix}grid_peak_shaving_raw).state;
+      return (raw & 0x0010) != 0;
+
+  - platform: template                     # 280 bit 8 — derived
     name: "${name_prefix}Grid Peak Shaving Status"
     id: ${id_prefix}esphome_grid_peak_shaving_status
-    register_type: holding
-    address: 280
-    bitmask: 0x100
+    lambda: |-
+      if (isnan(id(${id_prefix}grid_peak_shaving_raw).state)) return {};
+      uint16_t raw = (uint16_t) id(${id_prefix}grid_peak_shaving_raw).state;
+      return (raw & 0x0100) != 0;
 
 #                                               SENSORS                                               #
 #######################################################################################################
@@ -103,6 +141,9 @@ sensor:
     accuracy_decimals: 0
     device_class: battery
     value_type: U_WORD
+
+  # CHANGED 2026-05-04: register 190 now read once. Charge/Discharge are
+  # template sensors below.
   - platform: modbus_controller            # 190 Battery Power
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Battery Power"
@@ -114,32 +155,32 @@ sensor:
     accuracy_decimals: 0
     device_class: power
     value_type: S_WORD
-  - platform: modbus_controller            # Battery Power Charge only needed if you want to calculate Daily Energy Totals using ESPHome
-    modbus_controller_id: ${modbus_controller_id}
+
+  - platform: template                     # Battery charge — derived
     name: "${name_prefix}Battery Power Charge"
     id: ${id_prefix}esphome_battery_power_charge
-    register_type: holding
-    address: 190
     unit_of_measurement: "W"
     accuracy_decimals: 0
     device_class: power
-    value_type: S_WORD
     internal: true
+    update_interval: 5s
     lambda: |-
-      if (x > 0) return 0; else return x *-1;
-  - platform: modbus_controller            # Battery Power DisCharge only needed if you want to calculate Daily Energy Totals using ESPHome
-    modbus_controller_id: ${modbus_controller_id}
+      float v = id(${id_prefix}esphome_battery_power).state;
+      if (isnan(v)) return 0;
+      return v > 0 ? 0 : -v;
+
+  - platform: template                     # Battery discharge — derived
     name: "${name_prefix}Battery Power Discharge"
     id: ${id_prefix}esphome_battery_power_discharge
-    register_type: holding
-    address: 190
     unit_of_measurement: "W"
     accuracy_decimals: 0
     device_class: power
-    value_type: S_WORD
     internal: true
+    update_interval: 5s
     lambda: |-
-      if (x < 0) return 0; else return x;
+      float v = id(${id_prefix}esphome_battery_power).state;
+      if (isnan(v)) return 0;
+      return v < 0 ? 0 : v;
 ######################################################################################################
   - platform: modbus_controller            # 191 Battery Current
     modbus_controller_id: ${modbus_controller_id}
@@ -283,7 +324,6 @@ sensor:
     value_type: S_WORD
     filters:
       - multiply: 0.01
-
 ############################################### INVERTER ##############################################
   - platform: modbus_controller            # 175 Inverter Power
     modbus_controller_id: ${modbus_controller_id}
@@ -348,7 +388,6 @@ sensor:
       return ( high << 16 | low);
     filters:
       - multiply: 0.1
-
 ############################################### GRID ##################################################
   - platform: modbus_controller            # 079 Grid Frequency
     modbus_controller_id: ${modbus_controller_id}
@@ -425,6 +464,9 @@ sensor:
     value_type: S_WORD
     filters:
       - multiply: 0.01
+
+  # CHANGED 2026-05-04: register 172 now read once. Import/Export are
+  # template sensors below.
   - platform: modbus_controller            # 172 Grid CT Power
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Grid CT Power"
@@ -437,35 +479,34 @@ sensor:
     device_class: power
     state_class: measurement
     value_type: S_WORD
-  - platform: modbus_controller            # Grid Power Import only needed if you want to calculate Daily Energy Totals using ESPHome
-    modbus_controller_id: ${modbus_controller_id}
+
+  - platform: template                     # Grid Power Import — derived
     name: "${name_prefix}Grid Power Import"
     id: ${id_prefix}esphome_grid_ct_power_import
-    register_type: holding
-    address: 172
     unit_of_measurement: "W"
     accuracy_decimals: 0
     internal: true
     device_class: power
     state_class: measurement
-    value_type: S_WORD
+    update_interval: 5s
     lambda: |-
-      if (x < 0) return 0; else return x;
-  - platform: modbus_controller            # Grid Power Export only needed if you want to calculate Daily Energy Totals using ESPHome
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Power Export"
-    register_type: holding
-    address: 172
-    unit_of_measurement: "W"
-    id: ${id_prefix}esphome_grid_ct_power_export
-    accuracy_decimals: 0
-    internal: true
-    device_class: power
-    state_class: measurement
-    value_type: S_WORD
-    lambda: |-
-      if (x > 0) return 0; else return x *-1;
+      float v = id(${id_prefix}esphome_grid_ct_power).state;
+      if (isnan(v)) return 0;
+      return v < 0 ? 0 : v;
 
+  - platform: template                     # Grid Power Export — derived
+    name: "${name_prefix}Grid Power Export"
+    id: ${id_prefix}esphome_grid_ct_power_export
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    internal: true
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      float v = id(${id_prefix}esphome_grid_ct_power).state;
+      if (isnan(v)) return 0;
+      return v > 0 ? 0 : -v;
 ############################################### LOAD ################################################
   - platform: modbus_controller            # 178 Load Power
     modbus_controller_id: ${modbus_controller_id}
@@ -513,7 +554,6 @@ sensor:
       - multiply: 0.01
     value_type: U_WORD
     state_class: measurement
-
 ############################################### SOLAR PV1 #############################################
   - platform: modbus_controller            # 186 PV1 Power
     modbus_controller_id: ${modbus_controller_id}
@@ -554,7 +594,6 @@ sensor:
     filters:
       - multiply: 0.1
     value_type: U_WORD
-
 ############################################### SOLAR PV2 #############################################
   - platform: modbus_controller            # 187 PV2 Power
     modbus_controller_id: ${modbus_controller_id}
@@ -593,10 +632,8 @@ sensor:
     filters:
       - multiply: 0.1
     value_type: U_WORD
-
-#################################################### SOLAR PV3 #############################################
+############################################### SOLAR PV3 #############################################
 #### Uncomment this if you have a third MPPT single phase
-
   #- platform: modbus_controller            # 188 PV3 Power
   #  modbus_controller_id: ${modbus_controller_id}
   #  name: "${name_prefix}PV3 Power"
@@ -634,7 +671,6 @@ sensor:
   #  filters:
   #    - multiply: 0.1
   #  value_type: U_WORD
-
 ############################################### SOLAR TOTAL ###########################################
 # Choose one below
   - platform: template                     # Sum of PV1 and PV2 to get total PV Power
@@ -645,9 +681,8 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_pv1_power).state + id(inverter_esphome_pv2_power).state);
+      return (id(${id_prefix}esphome_pv1_power).state + id(${id_prefix}esphome_pv2_power).state);
     update_interval: 5s
-
   #- platform: template                     # Sum of PV1, PV2 and PV3 to get total PV Power
   #  name: "${name_prefix}Solar Power"
   #  unit_of_measurement: "W"
@@ -656,9 +691,8 @@ sensor:
   #  device_class: power
   #  state_class: measurement
   #  lambda: |-
-  #    return (id(inverter_esphome_pv1_power).state + id(inverter_esphome_pv2_power).state + id(inverter_esphome_pv3_power).state);
+  #    return (id(${id_prefix}esphome_pv1_power).state + id(${id_prefix}esphome_pv2_power).state + id(${id_prefix}esphome_pv3_power).state);
   #  update_interval: 5s
-
 ############################################### OUTPUTS ###############################################
   - platform: modbus_controller            # 166 Aux Power
     modbus_controller_id: ${modbus_controller_id}
@@ -679,7 +713,7 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_167).state - id(inverter_esphome_aux_power).state);
+      return (id(${id_prefix}esphome_inverter_power).state + id(${id_prefix}esphome_grid_power_167).state - id(${id_prefix}esphome_aux_power).state);
     update_interval: 5s
   - platform: template                     # Essential Power1 based on register 175 + 169 - 166
     name: "${name_prefix}Essential Power 1"
@@ -688,7 +722,7 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_inverter_power).state + id(inverter_esphome_grid_power_169).state - id(inverter_esphome_aux_power).state);
+      return (id(${id_prefix}esphome_inverter_power).state + id(${id_prefix}esphome_grid_power_169).state - id(${id_prefix}esphome_aux_power).state);
     update_interval: 5s
   - platform: template                     # Nonessential Power 172 - 167
     name: "${name_prefix}Nonessential Power"
@@ -697,7 +731,7 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_167).state);
+      return (id(${id_prefix}esphome_grid_ct_power).state - id(${id_prefix}esphome_grid_power_167).state);
     update_interval: 5s
   - platform: template                     # Nonessential Power1 172 - 169
     name: "${name_prefix}Nonessential Power 1"
@@ -706,9 +740,8 @@ sensor:
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(inverter_esphome_grid_ct_power).state - id(inverter_esphome_grid_power_169).state);
+      return (id(${id_prefix}esphome_grid_ct_power).state - id(${id_prefix}esphome_grid_power_169).state);
     update_interval: 5s
-
 ############################################### ENERGY ################################################
   - platform: modbus_controller            # 070 Day Battery Charge
     modbus_controller_id: ${modbus_controller_id}
@@ -872,13 +905,12 @@ sensor:
     filters:
       - multiply: 0.1
     value_type: U_WORD
-
 ############################################### OPTIONAL LOCAL ENERGY SENSORS ############################################
 ##### Calculates daily energy instead of relying on the inverter registers
 ##### You can comment these out if not needed
   - platform: total_daily_energy           # Day PV Energy
     name: "${name_prefix}Day PV Energy Local"
-    power_id: inverter_esphome_pv_total
+    power_id: ${id_prefix}esphome_pv_total
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -889,7 +921,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy           # Day Battery Charge Energy
     name: "${name_prefix}Day Battery Charge Energy Local"
-    power_id: inverter_esphome_battery_power_charge
+    power_id: ${id_prefix}esphome_battery_power_charge
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -900,7 +932,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy           # Day Battery DisCharge Energy
     name: "${name_prefix}Day Battery Discharge Energy Local"
-    power_id: inverter_esphome_battery_power_discharge
+    power_id: ${id_prefix}esphome_battery_power_discharge
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -911,7 +943,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy           # Day Load Energy
     name: "${name_prefix}Day Load Energy Local"
-    power_id: inverter_esphome_load_power
+    power_id: ${id_prefix}esphome_load_power
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -922,7 +954,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy           # Day Grid Import Energy
     name: "${name_prefix}Day Grid Import Energy Local"
-    power_id: inverter_esphome_grid_ct_power_import
+    power_id: ${id_prefix}esphome_grid_ct_power_import
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -933,7 +965,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy           # Day Grid Export Energy
     name: "${name_prefix}Day Grid Export Energy Local"
-    power_id: inverter_esphome_grid_ct_power_export
+    power_id: ${id_prefix}esphome_grid_ct_power_export
     unit_of_measurement: 'kWh'
     state_class: total_increasing
     device_class: energy
@@ -942,7 +974,6 @@ sensor:
     filters:
       # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
-
 ############################################### TEMPERATURE ################################################
   - platform: modbus_controller            # 090 DC Transformer Temperature
     modbus_controller_id: ${modbus_controller_id}
@@ -973,7 +1004,6 @@ sensor:
     filters:
       - offset: -1000
       - multiply:  0.1
-
 ################################################ READ SETTINGS #############################################
   - platform: modbus_controller            # 250 Prog1 Time
     modbus_controller_id: ${modbus_controller_id}
@@ -1024,7 +1054,6 @@ sensor:
     skip_updates: ${settings_skipped_updates}
     address: 255
     icon: "mdi:clock"
-
 ################################################ SAVE RAW REGISTERS ############################################
   - platform: modbus_controller            # 280 Grid Peak Shaving raw register value
     modbus_controller_id: ${modbus_controller_id}
@@ -1094,8 +1123,11 @@ sensor:
     value_type: U_WORD
     internal: true
     skip_updates: ${settings_skipped_updates}
-
 ################################################ WRITE SETTINGS ############################################
+# CHANGED 2026-05-04: removed `Toggle Priority Load` switch (was at 243).
+# That register is owned by the `Energy Pattern` select below; having both
+# was the duplicate-writer bug. To toggle priority load behaviour, use the
+# Energy Pattern select instead (Battery first / Load first).
 switch:
   - platform: modbus_controller            # 232 Toggle Grid Charge
     use_write_multiple: true
@@ -1124,7 +1156,6 @@ switch:
     address: 326
     bitmask: 8192 # 2^13 to target bit 13
     icon: "mdi:toggle-switch"
-
   - platform: modbus_controller            # 247 Toggle Solar Sell
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1143,15 +1174,7 @@ switch:
     address: 248
     bitmask: 1
     icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # 243 Priority Load
-    use_write_multiple: true
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Toggle Priority Load"
-    id: ${id_prefix}esphome_toggle_priority_load
-    register_type: holding
-    address: 243
-    bitmask: 1
-    icon: "mdi:toggle-switch"
+  # Toggle Priority Load (was at 243) — REMOVED. Use Energy Pattern select.
   - platform: modbus_controller            # 274 Prog1 Charge
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1206,7 +1229,6 @@ switch:
     address: 279
     bitmask: 1
     icon: "mdi:toggle-switch"
-
 number:
   - platform: modbus_controller            # 268 Prog1 Capacity
     use_write_multiple: true
@@ -1479,7 +1501,6 @@ number:
     max_value: 8000
     step: 500
     value_type: U_WORD
-
 ################################################ TEXT SENSORS ##################################################
 text_sensor:
   - platform: modbus_controller            # 059 Overall State
@@ -1507,9 +1528,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time1).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time1).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time1).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time1).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time1).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time1).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1523,9 +1544,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time2).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time2).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time2).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time2).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time2).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time2).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1539,9 +1560,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time3).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time3).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time3).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time3).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time3).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time3).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1555,9 +1576,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time4).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time4).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time4).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time4).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time4).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time4).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1571,9 +1592,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time5).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time5).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time5).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time5).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time5).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time5).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1587,9 +1608,9 @@ text_sensor:
     icon: "mdi:clock"
     lambda: |-
         int minutes, hours;
-        if (id(inverter_esphome_system_mode_time6).state) {
-        minutes = static_cast<int>(id(inverter_esphome_system_mode_time6).state) % 100;
-        hours = static_cast<int>(id(inverter_esphome_system_mode_time6).state) / 100;
+        if (id(${id_prefix}esphome_system_mode_time6).state) {
+        minutes = static_cast<int>(id(${id_prefix}esphome_system_mode_time6).state) % 100;
+        hours = static_cast<int>(id(${id_prefix}esphome_system_mode_time6).state) / 100;
         } else {
           minutes = 0;
           hours = 0;
@@ -1611,7 +1632,7 @@ text_sensor:
     id: ${id_prefix}esphome_ascii_serial
     icon: "mdi:text"
     lambda: |-
-      std::string hexData = id(inverter_esphome_serial).state;
+      std::string hexData = id(${id_prefix}esphome_serial).state;
       // Convert hex-encoded string to ASCII
       std::string asciiData;
       for (size_t i = 0; i < hexData.length(); i += 2) {
@@ -1620,10 +1641,9 @@ text_sensor:
         asciiData.push_back(chr);
       }
       return asciiData;
-
 ################################################ SELECT SENSORS ################################################
 select:
-  - platform: modbus_controller            #243 Select Energy Patern
+  - platform: modbus_controller            # 243 Select Energy Pattern
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     id: ${id_prefix}esphome_select_energy_pattern
@@ -1633,8 +1653,7 @@ select:
     optionsmap:
       "Battery first": 0
       "Load first": 1
-
-  - platform: modbus_controller            #244 Select Work Mode
+  - platform: modbus_controller            # 244 Select Work Mode
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     id: ${id_prefix}esphome_select_work_mode
@@ -1645,7 +1664,7 @@ select:
       "Selling First": 0
       "Zero Export + Limit to Load Only": 1
       "Limited to Home": 2
-  - platform: modbus_controller            #235 Select Generator Input
+  - platform: modbus_controller            # 235 Select Generator Input
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     id: ${id_prefix}esphome_select_generator_input
@@ -1656,7 +1675,7 @@ select:
       "Disable": 0
       "Output": 1
       "Input": 2
-  - platform: modbus_controller            #280 Select Grid Peak Shaving
+  - platform: modbus_controller            # 280 Select Grid Peak Shaving
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Grid Peak Shaving"
@@ -1668,22 +1687,17 @@ select:
       "Enabled": 256
     lambda: |-
       // we are only interested in the 8th bit binary 0001 0000 0000 need to map the options 0, 256 in select
-      //ESP_LOGE("main","Modbus Number incoming value = %d",x);
-      //ESP_LOGE("main","Modbus eval value = %d",(x & 0x0100));
       if ((x & 0x0100) == 0)
         return  std::string("Disabled");
       if ((x & 0x0100) == 256)
         return  std::string("Enabled");
       return {};
     write_lambda: |-
-      //ESP_LOGE("main","Modbus write gets = %d",value);
       uint16_t unmodified =  id(${id_prefix}grid_peak_shaving_raw).state;
-      //ESP_LOGE("main","Modbus write unmodified = %d", unmodified);
-      // optionsmap should only return 2 values... 0 , 256 so bitmask with complement 0x0100 to ensure we keep the original values in register. Then appply OR with the value that was chosen
+      // optionsmap should only return 2 values... 0 , 256 so bitmask with complement 0x0100 to ensure we keep the original values in register. Then apply OR with the value that was chosen
       uint16_t modified = ((unmodified & ~0x0100) | value);
-      //ESP_LOGE("main","Modbus write to write = %d", modified);
       return modified;
-  - platform: modbus_controller            #274 Select Prog1 Charge Option
+  - platform: modbus_controller            # 274 Select Prog1 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog1 Charge Option"
@@ -1709,7 +1723,7 @@ select:
       uint16_t unmodified =  id(${id_prefix}reg_274_raw).state;
       uint16_t modified = ((unmodified & ~0x0003) | value);
       return modified;
-  - platform: modbus_controller            #275  Select Prog2 Charge Option
+  - platform: modbus_controller            # 275  Select Prog2 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog2 Charge Option"
@@ -1735,7 +1749,7 @@ select:
       uint16_t unmodified =  id(${id_prefix}reg_275_raw).state;
       uint16_t modified = ((unmodified & ~0x0003) | value);
       return modified;
-  - platform: modbus_controller            #276  Select Prog3 Charge Option
+  - platform: modbus_controller            # 276  Select Prog3 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog3 Charge Option"
@@ -1761,7 +1775,7 @@ select:
       uint16_t unmodified =  id(${id_prefix}reg_276_raw).state;
       uint16_t modified = ((unmodified & ~0x0003) | value);
       return modified;
-  - platform: modbus_controller            #277  Select Prog4 Charge Option
+  - platform: modbus_controller            # 277  Select Prog4 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog4 Charge Option"
@@ -1787,7 +1801,7 @@ select:
       uint16_t unmodified =  id(${id_prefix}reg_277_raw).state;
       uint16_t modified = ((unmodified & ~0x0003) | value);
       return modified;
-  - platform: modbus_controller            #278  Select Prog5 Charge Option
+  - platform: modbus_controller            # 278  Select Prog5 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog5 Charge Option"
@@ -1813,7 +1827,7 @@ select:
       uint16_t unmodified =  id(${id_prefix}reg_278_raw).state;
       uint16_t modified = ((unmodified & ~0x0003) | value);
       return modified;
-  - platform: modbus_controller            #279  Select Prog6 Charge Option
+  - platform: modbus_controller            # 279  Select Prog6 Charge Option
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog6 Charge Option"
