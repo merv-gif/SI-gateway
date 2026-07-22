@@ -178,7 +178,7 @@ sensor:
     value_type: S_WORD
     lambda: |-
       if (x > 0) return x;
-      return 0;1
+      return 0;
 
 ############################################### INVERTER ##############################################
   - platform: modbus_controller            # 633 Inverter Power L1
@@ -1027,6 +1027,73 @@ sensor:
     skip_updates: ${settings_skipped_updates}
 
 ################################################ TEXT SENSORS #########################################
+  # ============================================================
+  # SI AGGREGATES  (added for ECM / app compatibility)
+  # Mirror the single-phase package ids + names 1:1 so the ECM
+  # (SI Surplus Scale) lambda and the SI app work UNCHANGED.
+  # ============================================================
+  - platform: template                     # Whole-site load = L1+L2+L3
+    name: "${name_prefix}Load Power"
+    id: ${id_prefix}esphome_load_power
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      float a = id(${id_prefix}esphome_load_power_l1).state;
+      float b = id(${id_prefix}esphome_load_power_l2).state;
+      float c = id(${id_prefix}esphome_load_power_l3).state;
+      if (isnan(a)) a = 0; if (isnan(b)) b = 0; if (isnan(c)) c = 0;
+      return a + b + c;
+
+  - platform: template                     # Whole-site grid power = L1+L2+L3 (feeds app grid gauge)
+    name: "${name_prefix}Grid Power"
+    id: ${id_prefix}esphome_grid_power
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      float a = id(${id_prefix}esphome_grid_power_l1).state;
+      float b = id(${id_prefix}esphome_grid_power_l2).state;
+      float c = id(${id_prefix}esphome_grid_power_l3).state;
+      if (isnan(a)) a = 0; if (isnan(b)) b = 0; if (isnan(c)) c = 0;
+      return a + b + c;
+
+  - platform: template                     # Signed battery power (+ = discharge, matches 1-phase reg 190)
+    name: "${name_prefix}Battery Power"
+    id: ${id_prefix}esphome_battery_power
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      float dis = id(${id_prefix}battery_discharge_power).state;
+      float chg = id(${id_prefix}battery_charge_power).state;
+      if (isnan(dis)) dis = 0; if (isnan(chg)) chg = 0;
+      return dis - chg;
+
+  - platform: template                     # Grid voltage = MIN(L1,L2,L3) -> catches a dropped phase (Eskom-down)
+    name: "${name_prefix}Grid Voltage"
+    id: ${id_prefix}esphome_grid_voltage
+    unit_of_measurement: "V"
+    accuracy_decimals: 1
+    device_class: voltage
+    state_class: measurement
+    update_interval: 5s
+    lambda: |-
+      float a = id(${id_prefix}esphome_grid_voltage_l1).state;
+      float b = id(${id_prefix}esphome_grid_voltage_l2).state;
+      float c = id(${id_prefix}esphome_grid_voltage_l3).state;
+      float m = NAN;
+      if (!isnan(a)) m = a;
+      if (!isnan(b) && (isnan(m) || b < m)) m = b;
+      if (!isnan(c) && (isnan(m) || c < m)) m = c;
+      return m;
+
 text_sensor:
   - platform: modbus_controller            # 500 Overall State (3PH uses 500, not 59)
     modbus_controller_id: ${modbus_controller_id}
