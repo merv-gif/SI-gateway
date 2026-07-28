@@ -1169,6 +1169,7 @@ number:
     skip_updates: ${settings_skipped_updates}
     force_new_range: true
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   - platform: modbus_controller            # 251 Prog2 Time
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1182,6 +1183,7 @@ number:
     step: 5
     skip_updates: ${settings_skipped_updates}
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   - platform: modbus_controller            # 252 Prog3 Time
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1195,6 +1197,7 @@ number:
     step: 5
     skip_updates: ${settings_skipped_updates}
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   - platform: modbus_controller            # 253 Prog4 Time
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1208,6 +1211,7 @@ number:
     step: 5
     skip_updates: ${settings_skipped_updates}
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   - platform: modbus_controller            # 254 Prog5 Time
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1221,6 +1225,7 @@ number:
     step: 5
     skip_updates: ${settings_skipped_updates}
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   - platform: modbus_controller            # 255 Prog6 Time
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
@@ -1234,6 +1239,7 @@ number:
     step: 5
     skip_updates: ${settings_skipped_updates}
     icon: "mdi:clock"
+    mode: box            # NOT a slider: a 0-2359 slider writes garbage times on a stray drag
   # ------------------------------------------------------------------------
   - platform: modbus_controller            # 268 Prog1 Capacity
     use_write_multiple: true
