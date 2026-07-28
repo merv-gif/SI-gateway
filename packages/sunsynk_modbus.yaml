@@ -1,6 +1,18 @@
 # ============================================================================
 # Sunsynk Modbus package — Solaire Intelligence fork
 # ----------------------------------------------------------------------------
+# CHANGELOG (2026-07-28, writable slot times + 274-279 single-writer):
+#   - Prog1-6 Time (250-255): sensor -> number. The slot times are now
+#     writable, so the app no longer has to assume hardcoded slot times and
+#     a change made on the inverter keypad shows up in the UI. Ids and names
+#     unchanged; MQTT topic moves sensor/ -> number/, HA domain sensor. ->
+#     number.
+#   - Removed the six `ProgN Grid Charge` switches (274-279). The `ProgN
+#     Charge Option` selects already own those registers and read-modify-write
+#     them correctly; the switches wrote the whole word (0x0001/0x0000),
+#     clobbering the generator bit — the same duplicate-writer bug that hit
+#     register 243 in May. Per-slot grid charge is now driven by the select.
+#
 # CHANGELOG (2026-05-04, register/duplicate-writer cleanup):
 #   - Register 243: removed `Toggle Priority Load` switch. The `Energy
 #     Pattern` select already controls this register cleanly (0=Battery
@@ -996,55 +1008,15 @@ sensor:
       - offset: -1000
       - multiply:  0.1
 ################################################ READ SETTINGS #############################################
-  - platform: modbus_controller            # 250 Prog1 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog1 Time"
-    id: ${id_prefix}esphome_system_mode_time1
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 250
-    force_new_range: true
-    icon: "mdi:clock"
-  - platform: modbus_controller            # 251 Prog2 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog2 Time"
-    id: ${id_prefix}esphome_system_mode_time2
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 251
-    icon: "mdi:clock"
-  - platform: modbus_controller            # 252 Prog3 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog3 Time"
-    id: ${id_prefix}esphome_system_mode_time3
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 252
-    icon: "mdi:clock"
-  - platform: modbus_controller            # 253 Prog4 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog4 Time"
-    id: ${id_prefix}esphome_system_mode_time4
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 253
-    icon: "mdi:clock"
-  - platform: modbus_controller            # 254 Prog5 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog5 Time"
-    id: ${id_prefix}esphome_system_mode_time5
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 254
-    icon: "mdi:clock"
-  - platform: modbus_controller            # 255 Prog6 Time
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog6 Time"
-    id: ${id_prefix}esphome_system_mode_time6
-    register_type: holding
-    skip_updates: ${settings_skipped_updates}
-    address: 255
-    icon: "mdi:clock"
+# CHANGED 2026-07-28: Prog1-6 Time (250-255) moved from read-only `sensor` to
+# writable `number` entities in the number: block below. Same ids, same names —
+# the Time Slot N template text_sensors and any lambda referencing
+# ${id_prefix}esphome_system_mode_timeN keep working unchanged. The MQTT topic
+# moves from sensor/<prefix>_progN_time to number/<prefix>_progN_time, and in HA
+# the entity moves from sensor. to number. domain.
+# Reason: the slot times were never writable, so the app/dashboard had to assume
+# hardcoded times. Any change made on the inverter's own keypad left the UI
+# showing stale times against live SOC targets.
 ################################################ SAVE RAW REGISTERS ############################################
   - platform: modbus_controller            # 280 Grid Peak Shaving raw register value
     modbus_controller_id: ${modbus_controller_id}
@@ -1166,61 +1138,103 @@ switch:
     bitmask: 1
     icon: "mdi:toggle-switch"
   # Toggle Priority Load (was at 243) — REMOVED. Use Energy Pattern select.
-  - platform: modbus_controller            # 274 Prog1 Charge
-    use_write_multiple: true
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog1 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time1
-    register_type: holding
-    address: 274
-    bitmask: 1
-    icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # 275 Prog2 Charge
-    modbus_controller_id: ${modbus_controller_id}
-    use_write_multiple: true
-    name: "${name_prefix}Prog2 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time2
-    register_type: holding
-    address: 275
-    bitmask: 1
-    icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # 276 Prog3 Charge
-    modbus_controller_id: ${modbus_controller_id}
-    use_write_multiple: true
-    name: "${name_prefix}Prog3 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time3
-    register_type: holding
-    address: 276
-    bitmask: 1
-    icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # 277 Prog4 Charge
-    modbus_controller_id: ${modbus_controller_id}
-    use_write_multiple: true
-    name: "${name_prefix}Prog4 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time4
-    register_type: holding
-    address: 277
-    bitmask: 1
-    icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # Prog5 Charge
-    modbus_controller_id: ${modbus_controller_id}
-    use_write_multiple: true
-    name: "${name_prefix}Prog5 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time5
-    register_type: holding
-    address: 278
-    bitmask: 1
-    icon: "mdi:toggle-switch"
-  - platform: modbus_controller            # 279 Prog6 Charge
-    modbus_controller_id: ${modbus_controller_id}
-    use_write_multiple: true
-    name: "${name_prefix}Prog6 Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge_time6
-    register_type: holding
-    address: 279
-    bitmask: 1
-    icon: "mdi:toggle-switch"
+  #
+  # CHANGED 2026-07-28: removed the six `ProgN Grid Charge` switches (274-279).
+  # Same class of bug as register 243: the `ProgN Charge Option` select below
+  # already owns each of these registers and writes them with a proper
+  # read-modify-write (preserving the generator bit). The switches wrote the
+  # whole register as 0x0001/0x0000 on every toggle, clobbering bit 1 (gen) and
+  # fighting the select whenever both were used.
+  # Anything that referenced switch/<prefix>_progN_grid_charge should now use
+  # select/<prefix>_progN_charge_option:
+  #   grid charge ON  -> "Allow Grid"      (or "Allow Grid & Gen" to keep gen)
+  #   grid charge OFF -> "No Grid or Gen"  (or "Allow Gen" to keep gen)
 number:
+  # ---- Prog1-6 Time (250-255) --------------------------------------------
+  # Value is HHMM encoded as a plain integer: 0 = 00:00, 530 = 05:30,
+  # 1700 = 17:00, 2359 = 23:59. The inverter only accepts 5-minute
+  # granularity, so callers should send minutes in {00,05,...,55}.
+  # Writable so the UI can stay in sync with times changed on the keypad.
+  - platform: modbus_controller            # 250 Prog1 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Time"
+    id: ${id_prefix}esphome_system_mode_time1
+    register_type: holding
+    address: 250
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    force_new_range: true
+    icon: "mdi:clock"
+  - platform: modbus_controller            # 251 Prog2 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Time"
+    id: ${id_prefix}esphome_system_mode_time2
+    register_type: holding
+    address: 251
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    icon: "mdi:clock"
+  - platform: modbus_controller            # 252 Prog3 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Time"
+    id: ${id_prefix}esphome_system_mode_time3
+    register_type: holding
+    address: 252
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    icon: "mdi:clock"
+  - platform: modbus_controller            # 253 Prog4 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog4 Time"
+    id: ${id_prefix}esphome_system_mode_time4
+    register_type: holding
+    address: 253
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    icon: "mdi:clock"
+  - platform: modbus_controller            # 254 Prog5 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Time"
+    id: ${id_prefix}esphome_system_mode_time5
+    register_type: holding
+    address: 254
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    icon: "mdi:clock"
+  - platform: modbus_controller            # 255 Prog6 Time
+    use_write_multiple: true
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog6 Time"
+    id: ${id_prefix}esphome_system_mode_time6
+    register_type: holding
+    address: 255
+    value_type: U_WORD
+    min_value: 0
+    max_value: 2359
+    step: 5
+    skip_updates: ${settings_skipped_updates}
+    icon: "mdi:clock"
+  # ------------------------------------------------------------------------
   - platform: modbus_controller            # 268 Prog1 Capacity
     use_write_multiple: true
     modbus_controller_id: ${modbus_controller_id}
