@@ -219,6 +219,7 @@ sensor:
     id: ${id_prefix}esphome_battery_discharge_limit_current
     register_type: holding
     address: 315
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "A"
     accuracy_decimals: 0
     device_class: current
@@ -242,6 +243,7 @@ sensor:
     id: ${id_prefix}esphome_battery_restart_capacity
     register_type: holding
     address: 218
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "%"
     accuracy_decimals: 0
     device_class: battery
@@ -252,6 +254,7 @@ sensor:
     id: ${id_prefix}esphome_battery_low_capacity
     register_type: holding
     address: 219
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "%"
     accuracy_decimals: 0
     device_class: battery
@@ -263,6 +266,7 @@ sensor:
     id: ${id_prefix}esphome_battery_shutdown_voltage
     register_type: holding
     address: 220
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "V"
     accuracy_decimals: 2
     device_class: battery
@@ -275,6 +279,7 @@ sensor:
     id: ${id_prefix}esphome_battery_restart_voltage
     register_type: holding
     address: 221
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "V"
     accuracy_decimals: 2
     device_class: battery
@@ -287,6 +292,7 @@ sensor:
     id: ${id_prefix}esphome_battery_low_voltage
     register_type: holding
     address: 222
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "V"
     accuracy_decimals: 2
     device_class: battery
@@ -312,6 +318,7 @@ sensor:
     id: ${id_prefix}esphome_battery_absorbtion_voltage
     register_type: holding
     address: 202
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "V"
     accuracy_decimals: 2
     device_class: battery
@@ -324,6 +331,7 @@ sensor:
     id: ${id_prefix}esphome_battery_float_voltage
     register_type: holding
     address: 203
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "V"
     accuracy_decimals: 2
     device_class: battery
@@ -1039,6 +1047,7 @@ sensor:
     id: ${id_prefix}reg_275_raw
     register_type: holding
     address: 275
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     internal: true
   - platform: modbus_controller            # 276 raw register value
@@ -1046,6 +1055,7 @@ sensor:
     id: ${id_prefix}reg_276_raw
     register_type: holding
     address: 276
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     internal: true
   - platform: modbus_controller            # 277 raw register value
@@ -1053,6 +1063,7 @@ sensor:
     id: ${id_prefix}reg_277_raw
     register_type: holding
     address: 277
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     internal: true
   - platform: modbus_controller            # 278 raw register value
@@ -1060,6 +1071,7 @@ sensor:
     id: ${id_prefix}reg_278_raw
     register_type: holding
     address: 278
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     internal: true
   - platform: modbus_controller            # 279 raw register value
@@ -1067,6 +1079,7 @@ sensor:
     id: ${id_prefix}reg_279_raw
     register_type: holding
     address: 279
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     internal: true
   - platform: modbus_controller            # 16 raw register value
@@ -1083,6 +1096,7 @@ sensor:
     id: ${id_prefix}reg_17_raw
     register_type: holding
     address: 17
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     internal: true
     skip_updates: ${settings_skipped_updates}
@@ -1099,6 +1113,7 @@ switch:
     id: ${id_prefix}esphome_toggle_grid_charge
     register_type: holding
     address: 232
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     bitmask: 1
     icon: "mdi:toggle-switch"
   - platform: modbus_controller            # 231 Toggle Generator Charge
@@ -1108,6 +1123,7 @@ switch:
     id: ${id_prefix}esphome_toggle_generator_charge
     register_type: holding
     address: 231
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     bitmask: 1
     icon: "mdi:toggle-switch"
   - platform: modbus_controller            # 326 Toggle Force Generator
@@ -1117,6 +1133,7 @@ switch:
     id: ${id_prefix}esphome_toggle_force_generator
     register_type: holding
     address: 326
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     bitmask: 8192 # 2^13 to target bit 13
     icon: "mdi:toggle-switch"
   - platform: modbus_controller            # 247 Toggle Solar Sell
@@ -1126,6 +1143,7 @@ switch:
     id: ${id_prefix}esphome_toggle_solar_sell
     register_type: holding
     address: 247
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     bitmask: 1
     icon: "mdi:toggle-switch"
   - platform: modbus_controller            # 248 Toggle System Timer
@@ -1135,6 +1153,7 @@ switch:
     id: ${id_prefix}esphome_toggle_Time_of_Use
     register_type: holding
     address: 248
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     bitmask: 1
     icon: "mdi:toggle-switch"
   # Toggle Priority Load (was at 243) — REMOVED. Use Energy Pattern select.
@@ -1177,6 +1196,7 @@ number:
     id: ${id_prefix}esphome_system_mode_time2
     register_type: holding
     address: 251
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     min_value: 0
     max_value: 2359
@@ -1191,6 +1211,7 @@ number:
     id: ${id_prefix}esphome_system_mode_time3
     register_type: holding
     address: 252
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     min_value: 0
     max_value: 2359
@@ -1205,6 +1226,7 @@ number:
     id: ${id_prefix}esphome_system_mode_time4
     register_type: holding
     address: 253
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     min_value: 0
     max_value: 2359
@@ -1219,6 +1241,7 @@ number:
     id: ${id_prefix}esphome_system_mode_time5
     register_type: holding
     address: 254
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     min_value: 0
     max_value: 2359
@@ -1233,6 +1256,7 @@ number:
     id: ${id_prefix}esphome_system_mode_time6
     register_type: holding
     address: 255
+    force_new_range: true   # this inverter will not answer a multi-register read here
     value_type: U_WORD
     min_value: 0
     max_value: 2359
@@ -1248,6 +1272,7 @@ number:
     name: "${name_prefix}Prog1 Capacity"
     unit_of_measurement: "%"
     address: 268
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1259,6 +1284,7 @@ number:
     name: "${name_prefix}Prog2 Capacity"
     unit_of_measurement: "%"
     address: 269
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1270,6 +1296,7 @@ number:
     name: "${name_prefix}Prog3 Capacity"
     unit_of_measurement: "%"
     address: 270
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1281,6 +1308,7 @@ number:
     name: "${name_prefix}Prog4 Capacity"
     unit_of_measurement: "%"
     address: 271
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1292,6 +1320,7 @@ number:
     name: "${name_prefix}Prog5 Capacity"
     unit_of_measurement: "%"
     address: 272
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1303,6 +1332,7 @@ number:
     name: "${name_prefix}Prog6 Capacity"
     unit_of_measurement: "%"
     address: 273
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 100
     step: 5
@@ -1314,6 +1344,7 @@ number:
     name: "${name_prefix}Prog1 Power"
     unit_of_measurement: "W"
     address: 256
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1325,6 +1356,7 @@ number:
     name: "${name_prefix}Prog2 Power"
     unit_of_measurement: "W"
     address: 257
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1336,6 +1368,7 @@ number:
     name: "${name_prefix}Prog3 Power"
     unit_of_measurement: "W"
     address: 258
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1347,6 +1380,7 @@ number:
     name: "${name_prefix}Prog4 Power"
     unit_of_measurement: "W"
     address: 259
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1358,6 +1392,7 @@ number:
     name: "${name_prefix}Prog5 Power"
     unit_of_measurement: "W"
     address: 260
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1369,6 +1404,7 @@ number:
     name: "${name_prefix}Prog6 Power"
     unit_of_measurement: "W"
     address: 261
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 8000
     step: 100
@@ -1380,6 +1416,7 @@ number:
     name: "${name_prefix}Prog1 Voltage"
     unit_of_measurement: "V"
     address: 262
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1394,6 +1431,7 @@ number:
     name: "${name_prefix}Prog2 Voltage"
     unit_of_measurement: "V"
     address: 263
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1408,6 +1446,7 @@ number:
     name: "${name_prefix}Prog3 Voltage"
     unit_of_measurement: "V"
     address: 264
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1422,6 +1461,7 @@ number:
     name: "${name_prefix}Prog4 Voltage"
     unit_of_measurement: "V"
     address: 265
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1436,6 +1476,7 @@ number:
     name: "${name_prefix}Prog5 Voltage"
     unit_of_measurement: "V"
     address: 266
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1450,6 +1491,7 @@ number:
     name: "${name_prefix}Prog6 Voltage"
     unit_of_measurement: "V"
     address: 267
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 41
     max_value: 60
     step: 0.1
@@ -1464,6 +1506,7 @@ number:
     name: "${name_prefix}Grid Charge Battery current"
     unit_of_measurement: "A"
     address: 230
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 185
     step: 5
@@ -1475,6 +1518,7 @@ number:
     name: "${name_prefix}Battery Max Charge current"
     unit_of_measurement: "A"
     address: 210
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 185
     step: 5
@@ -1486,6 +1530,7 @@ number:
     name: "${name_prefix}Battery Max Discharge current"
     unit_of_measurement: "A"
     address: 211
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     min_value: 0
     max_value: 185
     step: 5
@@ -1496,6 +1541,7 @@ number:
     name: "${name_prefix}Grid Peak shaving power"
     id: ${id_prefix}grid_peak_shaving_power
     address: 293
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "W"
     min_value: 0
     max_value: 8000
@@ -1507,6 +1553,7 @@ number:
     name: "${name_prefix}Max Sell power"
     id: ${id_prefix}max_sell_power
     address: 245
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     unit_of_measurement: "W"
     min_value: 0
     max_value: 8000
@@ -1636,6 +1683,7 @@ text_sensor:
     skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 3
+    force_new_range: true   # this inverter will not answer a multi-register read here
     register_count: 5
     internal: true
   - platform: template                     # Inverter ASCII Serial Number
@@ -1660,6 +1708,7 @@ select:
     id: ${id_prefix}esphome_select_energy_pattern
     name: "${name_prefix}Energy Pattern"
     address: 243
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "Battery first": 0
@@ -1670,6 +1719,7 @@ select:
     id: ${id_prefix}esphome_select_work_mode
     name: "${name_prefix}Work Mode"
     address: 244
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "Selling First": 0
@@ -1681,6 +1731,7 @@ select:
     id: ${id_prefix}esphome_select_generator_input
     name: "${name_prefix}Generator Input"
     address: 235
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "Disable": 0
@@ -1692,6 +1743,7 @@ select:
     name: "${name_prefix}Grid Peak Shaving"
     id: ${id_prefix}esphome_select_grid_peak_shaving
     address: 280
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "Disabled": 0
@@ -1714,6 +1766,7 @@ select:
     name: "${name_prefix}Prog1 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_1
     address: 274
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
@@ -1740,6 +1793,7 @@ select:
     name: "${name_prefix}Prog2 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_2
     address: 275
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
@@ -1766,6 +1820,7 @@ select:
     name: "${name_prefix}Prog3 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_3
     address: 276
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
@@ -1792,6 +1847,7 @@ select:
     name: "${name_prefix}Prog4 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_4
     address: 277
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
@@ -1818,6 +1874,7 @@ select:
     name: "${name_prefix}Prog5 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_5
     address: 278
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
@@ -1844,6 +1901,7 @@ select:
     name: "${name_prefix}Prog6 Charge Option"
     id: ${id_prefix}esphome_select_system_mode_charge_option_time_6
     address: 279
+    force_new_range: true   # settings block: this inverter only answers single-register reads
     value_type: U_WORD
     optionsmap:
       "No Grid or Gen": 0
