@@ -1452,7 +1452,7 @@ select:
   - platform: modbus_controller            # 172 Prog1 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog1 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_1
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_1
     address: 172
     value_type: U_WORD
     use_write_multiple: true
@@ -1486,7 +1486,7 @@ select:
   - platform: modbus_controller            # 173 Prog2 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog2 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_2
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_2
     address: 173
     value_type: U_WORD
     use_write_multiple: true
@@ -1520,7 +1520,7 @@ select:
   - platform: modbus_controller            # 174 Prog3 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog3 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_3
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_3
     address: 174
     value_type: U_WORD
     use_write_multiple: true
@@ -1554,7 +1554,7 @@ select:
   - platform: modbus_controller            # 175 Prog4 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog4 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_4
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_4
     address: 175
     value_type: U_WORD
     use_write_multiple: true
@@ -1588,7 +1588,7 @@ select:
   - platform: modbus_controller            # 176 Prog5 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog5 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_5
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_5
     address: 176
     value_type: U_WORD
     use_write_multiple: true
@@ -1622,7 +1622,7 @@ select:
   - platform: modbus_controller            # 177 Prog6 Charge Option — bit0 grid, bit1 gen
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog6 Charge Option"
-    id: ${id_prefix}esphome_select_charge_option_time_6
+    id: ${id_prefix}esphome_select_system_mode_charge_option_time_6
     address: 177
     value_type: U_WORD
     use_write_multiple: true
@@ -1669,7 +1669,7 @@ switch:
   - platform: modbus_controller            # 146 bit0 System Timer (TOU) — NOT 248 bit2
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Toggle System Timer"
-    id: ${id_prefix}toggle_system_timer
+    id: ${id_prefix}esphome_toggle_Time_of_Use
     address: 146
     register_type: holding
     bitmask: 0x0001
