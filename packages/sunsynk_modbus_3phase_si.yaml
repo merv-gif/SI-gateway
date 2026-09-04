@@ -1,28 +1,44 @@
 # ============================================================================
-# SUNSYNK / DEYE 3-PHASE (LOW VOLTAGE) — SI READ-ONLY REGISTER MAP
+# SUNSYNK / DEYE 3-PHASE (LOW VOLTAGE) — SI REGISTER MAP
 # ============================================================================
 # Provenance: this is solaire-esphome/packages/sunsynk_modbus_3phase_fixed.yaml
 # — the map running on the Trivella gateway (client 3cbaac) — with EVERY
 # WRITE ENTITY REMOVED. The read side is byte-for-byte the field-proven map;
 # nothing was re-derived.
 #
-# WHY READ-ONLY (3 Sep 2026)
-#   The 3-phase write addresses are not the single-phase ones and none of them
-#   have been confirmed against a live three-phase machine:
-#     * the four control toggles are packed into ONE register, 248, with
-#       bitmasks 1 / 2 / 4 / 8 (grid charge / priority load / system timer /
-#       solar sell). No reference register map documents that packing.
-#     * slot target SOC sits at 166-171, not the single-phase 268-273.
-#   A wrong READ is cosmetic. A wrong WRITE changes how a customer's inverter
-#   behaves, and on a three-phase installation that is someone's business.
-#   So the settings are still POLLED AND PUBLISHED — you can see grid charge,
-#   priority load, system timer, solar sell, every slot's target SOC and the
-#   charge current — but nothing on the device can set them.
+# WRITES ENABLED 4 Sep 2026 — AT MEASURED ADDRESSES
+#   This map shipped read-only because the 3-phase write addresses had never
+#   been confirmed on a live machine. They now have been, on Grant Levin's
+#   inverter (client a31cd1), by diffing register snapshots against changes
+#   made on the inverter's OWN FRONT PANEL — never by writing and hoping.
+#   Full method and evidence: solaire-esphome/3P-REGISTER-FINDINGS.md
 #
-#   Once the writes are confirmed on a real three-phase machine, the write
-#   entities go back in and ship as an ordinary fleet OTA release. That is
-#   what fleet OTA is for: an unverified register map is a push, not a site
-#   visit.
+#   WHAT THE OLD MAP GOT WRONG. The four toggles were believed to be packed
+#   into register 248 with bitmasks 1/2/4/8. On this machine 248 does not
+#   exist — 241-267 is a dead block that reads 0xFFFF stable. Neither do 243
+#   (Energy Pattern) or 244 (Work Mode). And the slot charge options are not
+#   at 274-279: that is part of a 42-register run (268-309) that all reads
+#   1000. Every one of those addresses was inherited from the single-phase
+#   map and never checked.
+#
+#   WHERE THEY ACTUALLY ARE, each confirmed by a panel change moving exactly
+#   one register, and confirmed again in the reverse direction:
+#     141           Priority Load        plain 0/1
+#     145           Solar Sell           plain 0/1
+#     146 bit0      System Timer (TOU)   bitfield, reads 0xFF with timer on
+#     148-153       Prog 1-6 Time        (read; the old header said 250-255)
+#     166-171       Prog 1-6 Capacity    target SOC %
+#     172-177       Prog 1-6 Charge Opt  bit0 grid charge, bit1 gen charge
+#
+#   STILL UNVERIFIED: that any of these ACCEPT A WRITE. Every change during
+#   mapping was made on the panel. Reading a setting is not the same as
+#   writing it — the panel may enforce validation the register does not.
+#   First fleet push must be verified by read-back before it is trusted.
+#
+#   READ-MODIFY-WRITE IS MANDATORY on 146 and 172-177. 146 reads 0xFF and only
+#   bit0 is understood; 172-177 carry two independent flags. Writing a bare
+#   value clears bits that belong to the customer's configuration. Every write
+#   entity below preserves the rest of the word.
 #
 # THE ONE WRITE THAT REMAINS: the hourly RTC sync (registers 22-24). It has
 # been running on the Trivella unit against this exact map for months, and an
@@ -141,54 +157,9 @@ binary_sensor:
     force_new_range: true
     bitmask: 0x100
 
-############################################### SETTINGS — READ-ONLY ##################################
-# Register 248 packs the four control toggles as bits. These are the same four
-# that exist as SWITCHES on the single-phase map; here they are binary sensors,
-# so the state is visible and unwritable. Read-back only.
-  - platform: modbus_controller            # 248 bit0 — Grid Charge
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Toggle Grid Charge"
-    id: ${id_prefix}esphome_toggle_grid_charge
-    register_type: holding
-    address: 248
-    force_new_range: true
-    bitmask: 0x0001
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-
-  - platform: modbus_controller            # 248 bit1 — Priority Load
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Toggle Priority Load"
-    id: ${id_prefix}esphome_toggle_priority_load
-    register_type: holding
-    address: 248
-    force_new_range: true
-    bitmask: 0x0002
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-
-  - platform: modbus_controller            # 248 bit2 — System Timer (TOU)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Toggle System Timer"
-    id: ${id_prefix}esphome_toggle_Time_of_Use
-    register_type: holding
-    address: 248
-    force_new_range: true
-    bitmask: 0x0004
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-
-  - platform: modbus_controller            # 248 bit3 — Solar Sell
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Toggle Solar Sell"
-    id: ${id_prefix}esphome_toggle_solar_sell
-    register_type: holding
-    address: 248
-    force_new_range: true
-    bitmask: 0x0008
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-
+############################################### SETTINGS ############################################
+# The four toggles are NOT packed into 248 on this machine — see the header.
+# They are switches now, each at its measured address, further down this file.
 
 ############################################### BATTERY ###############################################
 sensor:
@@ -1073,60 +1044,6 @@ sensor:
     value_type: U_WORD
     internal: true
 
-  - platform: modbus_controller            # 274–279 Charge Option raws (same)
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_274_raw
-    register_type: holding
-    address: 274
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_275_raw
-    register_type: holding
-    address: 275
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_276_raw
-    register_type: holding
-    address: 276
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_277_raw
-    register_type: holding
-    address: 277
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_278_raw
-    register_type: holding
-    address: 278
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
-  - platform: modbus_controller
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_279_raw
-    register_type: holding
-    address: 279
-    force_new_range: true
-    value_type: U_WORD
-    internal: true
-
   - platform: modbus_controller            # 16 raw (for Rated Power)
     modbus_controller_id: ${modbus_controller_id}
     id: ${id_prefix}reg_16_raw
@@ -1212,82 +1129,10 @@ sensor:
       if (isnan(v)) return NAN;
       return v;
 
-############################################### SETTINGS — READ-ONLY ##################################
-# Slot target SOC and the grid-charge current, published but not settable.
+############################################### SETTINGS ############################################
+# Slot target SOC moved to `number:` (writable) at the bottom of this file.
 # Ids match the single-phase map so anything reading them (the app, HA, the
 # dashboards) sees the same entity on either phase.
-  - platform: modbus_controller            # 166 Prog1 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog1 Capacity"
-    id: ${id_prefix}esphome_set_soc_time1
-    register_type: holding
-    address: 166
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-  - platform: modbus_controller            # 167 Prog2 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog2 Capacity"
-    id: ${id_prefix}esphome_set_soc_time2
-    register_type: holding
-    address: 167
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-  - platform: modbus_controller            # 168 Prog3 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog3 Capacity"
-    id: ${id_prefix}esphome_set_soc_time3
-    register_type: holding
-    address: 168
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-  - platform: modbus_controller            # 169 Prog4 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog4 Capacity"
-    id: ${id_prefix}esphome_set_soc_time4
-    register_type: holding
-    address: 169
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-  - platform: modbus_controller            # 170 Prog5 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog5 Capacity"
-    id: ${id_prefix}esphome_set_soc_time5
-    register_type: holding
-    address: 170
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-  - platform: modbus_controller            # 171 Prog6 Capacity (3-phase block, NOT 268-273)
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Prog6 Capacity"
-    id: ${id_prefix}esphome_set_soc_time6
-    register_type: holding
-    address: 171
-    force_new_range: true
-    unit_of_measurement: "%"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
 
   - platform: modbus_controller            # 210 Grid Charge Battery Current
     modbus_controller_id: ${modbus_controller_id}
@@ -1302,37 +1147,9 @@ sensor:
     skip_updates: ${settings_skipped_updates}
     entity_category: diagnostic
 
-  # Raws behind the read-only mode text sensors further down.
-  - platform: modbus_controller            # 243 Energy Pattern
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_243_raw
-    register_type: holding
-    address: 243
-    force_new_range: true
-    value_type: U_WORD
-    skip_updates: ${settings_skipped_updates}
-    internal: true
-
-  - platform: modbus_controller            # 244 Work Mode
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_244_raw
-    register_type: holding
-    address: 244
-    force_new_range: true
-    value_type: U_WORD
-    skip_updates: ${settings_skipped_updates}
-    internal: true
-
-  - platform: modbus_controller            # 235 Generator Input
-    modbus_controller_id: ${modbus_controller_id}
-    id: ${id_prefix}reg_235_raw
-    register_type: holding
-    address: 235
-    force_new_range: true
-    value_type: U_WORD
-    skip_updates: ${settings_skipped_updates}
-    internal: true
-
+  # ── Raws behind the writable slot selects ────────────────────────────────
+  # A select cannot read-modify-write without knowing the current word. These
+  # are internal: the customer-facing entity is the select, not the number.
 
 text_sensor:
   - platform: modbus_controller            # 500 Overall State (3PH uses 500, not 59)
@@ -1478,142 +1295,463 @@ text_sensor:
       }
       return {asciiData};
 
-############################################### SETTINGS — READ-ONLY ##################################
-# The single-phase map exposes these as SELECTs. Here they are text sensors:
-# same names, same option strings, no way to write a wrong value to a
-# three-phase inverter before the addresses are confirmed.
-  - platform: template                     # 274 Prog1 Charge Option (read-only)
+############################################### SETTINGS — MOVED ###################################
+# The read-only text-sensor mirrors that used to live here are GONE:
+#   ProgN Charge Option  -> now real `select` entities at 172-177 (see below)
+#   Energy Pattern (243) -> register does not exist on this machine
+#   Work Mode      (244) -> register does not exist on this machine
+#   Generator Input (235)-> register does not exist on this machine
+# Keeping the text sensors alongside the selects would have published TWO
+# entities named "ProgN Charge Option", and MQTT object ids come from the NAME
+# — they would have collided on the wire.
+
+
+############################################### WRITABLE SETTINGS ###################################
+# Everything below writes to the inverter. Addresses measured on a live machine
+# 4 Sep 2026 — see the header. Nothing here is inherited from the 1p map.
+
+############################################### SLOT WORD CACHE #####################################
+# 172-177 need read-modify-write, which means knowing the current word.
+#
+# DO NOT go back to `internal: true` modbus sensors for this. That is exactly
+# what broke Battery Boost on 11 Aug 2026: the guard read inverter_reg_27x_raw,
+# those sensors never populate in practice, and the button could never pass its
+# own check. The fix there was to read from the SELECT — entities that are
+# proven to carry values. Same principle here, one step further: the select's
+# publish lambda stashes the raw word it was just handed, and the write path
+# reads that. 0xFFFF means "not polled yet" and blocks any write.
+globals:
+  - id: ${id_prefix}slot_opt_1
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+  - id: ${id_prefix}slot_opt_2
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+  - id: ${id_prefix}slot_opt_3
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+  - id: ${id_prefix}slot_opt_4
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+  - id: ${id_prefix}slot_opt_5
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+  - id: ${id_prefix}slot_opt_6
+    type: uint16_t
+    restore_value: no
+    initial_value: '0xFFFF'
+
+number:
+  - platform: modbus_controller            # 166 Prog1 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog1 Capacity"
+    id: ${id_prefix}esphome_set_soc_time1
+    address: 166
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 167 Prog2 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog2 Capacity"
+    id: ${id_prefix}esphome_set_soc_time2
+    address: 167
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 168 Prog3 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog3 Capacity"
+    id: ${id_prefix}esphome_set_soc_time3
+    address: 168
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 169 Prog4 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog4 Capacity"
+    id: ${id_prefix}esphome_set_soc_time4
+    address: 169
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 170 Prog5 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog5 Capacity"
+    id: ${id_prefix}esphome_set_soc_time5
+    address: 170
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 171 Prog6 Capacity — 3-phase block, NOT the 1p 268-273
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Prog6 Capacity"
+    id: ${id_prefix}esphome_set_soc_time6
+    address: 171
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+
+select:
+  - platform: modbus_controller            # 172 Prog1 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog1 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_1
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_1
+    address: 172
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_274_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_274_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_1) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
-  - platform: template                     # 275 Prog2 Charge Option (read-only)
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_1);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller            # 173 Prog2 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog2 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_2
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_2
+    address: 173
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_275_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_275_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_2) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
-  - platform: template                     # 276 Prog3 Charge Option (read-only)
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_2);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller            # 174 Prog3 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog3 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_3
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_3
+    address: 174
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_276_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_276_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_3) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
-  - platform: template                     # 277 Prog4 Charge Option (read-only)
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_3);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller            # 175 Prog4 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog4 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_4
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_4
+    address: 175
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_277_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_277_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_4) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
-  - platform: template                     # 278 Prog5 Charge Option (read-only)
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_4);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller            # 176 Prog5 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog5 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_5
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_5
+    address: 176
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_278_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_278_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_5) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
-  - platform: template                     # 279 Prog6 Charge Option (read-only)
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_5);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
+
+  - platform: modbus_controller            # 177 Prog6 Charge Option — bit0 grid, bit1 gen
+    modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog6 Charge Option"
-    id: ${id_prefix}esphome_select_system_mode_charge_option_time_6
-    icon: "mdi:transmission-tower"
-    update_interval: 60s
-    entity_category: diagnostic
+    id: ${id_prefix}esphome_select_charge_option_time_6
+    address: 177
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    optionsmap:
+      "No Grid or Gen": 0
+      "Allow Grid": 1
+      "Allow Gen": 2
+      "Allow Grid & Gen": 3
     lambda: |-
-      if (!id(${id_prefix}reg_279_raw).has_state()) return {};
-      switch (((uint16_t) id(${id_prefix}reg_279_raw).state) & 0x0003) {
-        case 0: return {"No Grid or Gen"};
-        case 1: return {"Allow Grid"};
-        case 2: return {"Allow Gen"};
-        case 3: return {"Allow Grid & Gen"};
+      // Stash the word we were just handed. This lambda runs on every poll and
+      // x IS the raw register — no separate sensor, nothing that can fail to
+      // populate. This is the only thing that feeds the write path.
+      id(${id_prefix}slot_opt_6) = (uint16_t) x;
+      switch (x & 0x0003) {
+        case 0: return std::string("No Grid or Gen");
+        case 1: return std::string("Allow Grid");
+        case 2: return std::string("Allow Gen");
+        case 3: return std::string("Allow Grid & Gen");
       }
       return {};
+    write_lambda: |-
+      // Read-modify-write. Only bits 0-1 are ours; the rest of the word belongs
+      // to the customer's configuration and must survive untouched.
+      uint16_t raw = id(${id_prefix}slot_opt_6);
+      if (raw == 0xFFFF) return {};   // never polled — refuse rather than guess
+      return ((raw & ~0x0003) | value);
 
-  - platform: template                     # 243 Energy Pattern (read-only)
-    name: "${name_prefix}Energy Pattern"
-    id: ${id_prefix}esphome_select_energy_pattern
-    icon: "mdi:home-lightning-bolt"
-    update_interval: 60s
-    entity_category: diagnostic
-    lambda: |-
-      if (!id(${id_prefix}reg_243_raw).has_state()) return {};
-      switch ((uint16_t) id(${id_prefix}reg_243_raw).state) {
-        case 0: return {"Battery first"};
-        case 1: return {"Load first"};
-      }
-      return {};
 
-  - platform: template                     # 244 Work Mode (read-only)
-    name: "${name_prefix}Work Mode"
-    id: ${id_prefix}esphome_select_work_mode
-    icon: "mdi:cog-outline"
-    update_interval: 60s
-    entity_category: diagnostic
-    lambda: |-
-      if (!id(${id_prefix}reg_244_raw).has_state()) return {};
-      switch ((uint16_t) id(${id_prefix}reg_244_raw).state) {
-        case 0: return {"Selling First"};
-        case 1: return {"Zero Export + Limit to Load Only"};
-        case 2: return {"Limited to Home"};
-      }
-      return {};
+switch:
+  - platform: modbus_controller            # 145 Solar Sell — plain 0/1, NOT 248 bit3
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Solar Sell"
+    id: ${id_prefix}toggle_solar_sell
+    address: 145
+    register_type: holding
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
 
-  - platform: template                     # 235 Generator Input (read-only)
-    name: "${name_prefix}Generator Input"
-    id: ${id_prefix}esphome_select_generator_input
-    icon: "mdi:engine-outline"
-    update_interval: 60s
-    entity_category: diagnostic
+  - platform: modbus_controller            # 146 bit0 System Timer (TOU) — NOT 248 bit2
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle System Timer"
+    id: ${id_prefix}toggle_system_timer
+    address: 146
+    register_type: holding
+    bitmask: 0x0001
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+    # 146 reads 0xFF with the timer on and 0xFE with it off. Seven other bits
+    # are set and NOT identified — six slots plus one spare is the obvious
+    # guess and it is only a guess. bitmask makes ESPHome read-modify-write,
+    # which is the only reason touching this register is safe.
+
+  - platform: modbus_controller            # 141 Priority Load — plain 0/1, NOT 248 bit1
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Toggle Priority Load"
+    id: ${id_prefix}toggle_priority_load
+    address: 141
+    register_type: holding
+    use_write_multiple: true
+    force_new_range: true
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  # ── Global Grid Charge ────────────────────────────────────────────────────
+  # There is no global grid-charge register on this machine: grid charge is
+  # bit0 of each slot word, six of them. The app has one switch, so this drives
+  # all six. ON only when EVERY slot has bit0 set — a half-on state would lie.
+  # One tap writes up to six registers, each read-modify-write so gen charge
+  # (bit1) survives.
+  - platform: template
+    name: "${name_prefix}Toggle Grid Charge"
+    id: ${id_prefix}toggle_grid_charge
+    optimistic: false
+    entity_category: config
     lambda: |-
-      if (!id(${id_prefix}reg_235_raw).has_state()) return {};
-      switch ((uint16_t) id(${id_prefix}reg_235_raw).state) {
-        case 0: return {"Disable"};
-        case 1: return {"Output"};
-        case 2: return {"Input"};
+      // ON only when EVERY polled slot has bit0. Unknown until at least one
+      // slot has been polled — see the SLOT WORD CACHE note above.
+      bool all_on = true, any_known = false;
+      const uint16_t w[6] = { id(${id_prefix}slot_opt_1), id(${id_prefix}slot_opt_2),
+                              id(${id_prefix}slot_opt_3), id(${id_prefix}slot_opt_4),
+                              id(${id_prefix}slot_opt_5), id(${id_prefix}slot_opt_6) };
+      for (int i = 0; i < 6; i++) {
+        if (w[i] == 0xFFFF) continue;
+        any_known = true;
+        if ((w[i] & 0x0001) == 0) all_on = false;
       }
-      return {};
+      if (!any_known) return {};
+      return all_on;
+    turn_on_action:
+      - lambda: |-
+          // No global grid-charge register exists here: it is bit0 of each slot
+          // word. Read-modify-write every slot so gen charge (bit1) survives.
+          // Same pattern as the RTC sync script above — proven on this bus.
+          esphome::modbus_controller::ModbusController *ctrl = id(${modbus_controller_id});
+          uint16_t w[6] = { id(${id_prefix}slot_opt_1), id(${id_prefix}slot_opt_2),
+                            id(${id_prefix}slot_opt_3), id(${id_prefix}slot_opt_4),
+                            id(${id_prefix}slot_opt_5), id(${id_prefix}slot_opt_6) };
+          const uint16_t regs[6] = {172, 173, 174, 175, 176, 177};
+          for (int i = 0; i < 6; i++) {
+            if (w[i] == 0xFFFF) continue;   // not polled yet — never guess
+            uint16_t cur = w[i];
+            uint16_t next = (uint16_t)(cur | 0x0001);
+            if (next == cur) continue;   // never write a word that is already right
+            ctrl->queue_command(
+              esphome::modbus_controller::ModbusCommandItem::create_write_single_command(
+                ctrl, regs[i], next));
+            ESP_LOGI("si_3p", "grid charge ON: reg %u %u -> %u", regs[i], cur, next);
+          }
+      - switch.template.publish:
+          id: ${id_prefix}toggle_grid_charge
+          state: true
+    turn_off_action:
+      - lambda: |-
+          // No global grid-charge register exists here: it is bit0 of each slot
+          // word. Read-modify-write every slot so gen charge (bit1) survives.
+          // Same pattern as the RTC sync script above — proven on this bus.
+          esphome::modbus_controller::ModbusController *ctrl = id(${modbus_controller_id});
+          uint16_t w[6] = { id(${id_prefix}slot_opt_1), id(${id_prefix}slot_opt_2),
+                            id(${id_prefix}slot_opt_3), id(${id_prefix}slot_opt_4),
+                            id(${id_prefix}slot_opt_5), id(${id_prefix}slot_opt_6) };
+          const uint16_t regs[6] = {172, 173, 174, 175, 176, 177};
+          for (int i = 0; i < 6; i++) {
+            if (w[i] == 0xFFFF) continue;   // not polled yet — never guess
+            uint16_t cur = w[i];
+            uint16_t next = (uint16_t)(cur & ~0x0001);
+            if (next == cur) continue;   // never write a word that is already right
+            ctrl->queue_command(
+              esphome::modbus_controller::ModbusCommandItem::create_write_single_command(
+                ctrl, regs[i], next));
+            ESP_LOGI("si_3p", "grid charge OFF: reg %u %u -> %u", regs[i], cur, next);
+          }
+      - switch.template.publish:
+          id: ${id_prefix}toggle_grid_charge
+          state: false
 
