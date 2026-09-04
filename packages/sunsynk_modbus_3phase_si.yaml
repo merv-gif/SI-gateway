@@ -1134,19 +1134,6 @@ sensor:
 # Ids match the single-phase map so anything reading them (the app, HA, the
 # dashboards) sees the same entity on either phase.
 
-  - platform: modbus_controller            # 210 Grid Charge Battery Current
-    modbus_controller_id: ${modbus_controller_id}
-    name: "${name_prefix}Grid Charge Battery current"
-    id: ${id_prefix}esphome_grid_charge_bat_current
-    register_type: holding
-    address: 210
-    force_new_range: true
-    unit_of_measurement: "A"
-    value_type: U_WORD
-    accuracy_decimals: 0
-    skip_updates: ${settings_skipped_updates}
-    entity_category: diagnostic
-
   # ── Raws behind the writable slot selects ────────────────────────────────
   # A select cannot read-modify-write without knowing the current word. These
   # are internal: the customer-facing entity is the select, not the number.
@@ -1347,6 +1334,29 @@ globals:
     initial_value: '0xFFFF'
 
 number:
+  - platform: modbus_controller            # 125 Grid Charge Amps
+    # NOT 210 (what the read-only map guessed, reads 0 here) and NOT the 1p
+    # map's 230 (0xFFFF on this machine). 125 identified by Merv from the
+    # inverter's own charge tab, pending a watch-mode confirmation.
+    #
+    # The inverter keeps grid and gen adjacent everywhere: bit0 grid / bit1 gen
+    # in the slot words at 172-177, and 125 grid amps / 128 gen amps here.
+    #
+    # 🛑 126 IS A VOLTAGE SETTING. Do not add it to this map, do not write it.
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Grid Charge Battery current"
+    id: ${id_prefix}esphome_grid_charge_bat_current
+    address: 125
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    unit_of_measurement: "A"
+    min_value: 0
+    max_value: 185
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
   - platform: modbus_controller            # 166 Prog1 Capacity — 3-phase block, NOT the 1p 268-273
     modbus_controller_id: ${modbus_controller_id}
     name: "${name_prefix}Prog1 Capacity"
