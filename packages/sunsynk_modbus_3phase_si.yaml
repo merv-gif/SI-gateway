@@ -1334,6 +1334,57 @@ globals:
     initial_value: '0xFFFF'
 
 number:
+  - platform: modbus_controller            # 108 Battery Charge Limit
+    # 🛑 THIS REGISTER CLAMPS 125. The inverter caps grid charge amps at this
+    # value, so Battery Boost writing 100 A to 125 charges at whatever 108 says
+    # and nothing in the app explains why. Identified 4 Sep 2026 on a31cd1:
+    # panel 80 -> 100 moved 108 alone. Also true on single-phase (reg 210 there).
+    #
+    # Exposed writable so a value changed during a bench session can be put back
+    # over the air instead of needing a site visit.
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Battery Charge Limit"
+    id: ${id_prefix}esphome_battery_charge_limit
+    address: 108
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    unit_of_measurement: "A"
+    min_value: 0
+    max_value: 185
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: config
+
+  - platform: modbus_controller            # 124 UNIDENTIFIED — diagnostic only
+    # We do not know what this is. It sits next to 125, it is not on the
+    # inverter's charge menu, and it moved 35 -> 45 on a31cd1 on 4 Sep 2026 as a
+    # SIDE EFFECT of setting 125 from the panel — it did not come back when 125
+    # was restored. It is exposed here for one reason: to put a customer's value
+    # back over the air. Do not change it on a machine whose original value you
+    # have not written down first.
+    #
+    # Range is deliberately capped at 100. The only two values ever observed are
+    # 35 and 45; a wider range on an unidentified register is not a convenience,
+    # it is a way to brick someone's install.
+    #
+    # 🛑 126 IS A VOLTAGE SETTING AND IS NOT MAPPED. force_new_range on both 124
+    # and 125 keeps the read ranges apart so nothing ever batches across it.
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg124 Unidentified"
+    id: ${id_prefix}esphome_reg124_unidentified
+    address: 124
+    register_type: holding
+    value_type: U_WORD
+    use_write_multiple: true
+    force_new_range: true
+    min_value: 0
+    max_value: 100
+    step: 1
+    skip_updates: ${settings_skipped_updates}
+    entity_category: diagnostic
+
   - platform: modbus_controller            # 125 Grid Charge Amps
     # NOT 210 (what the read-only map guessed, reads 0 here) and NOT the 1p
     # map's 230 (0xFFFF on this machine). 125 identified by Merv from the
@@ -1350,6 +1401,7 @@ number:
     register_type: holding
     value_type: U_WORD
     use_write_multiple: true
+    force_new_range: true
     unit_of_measurement: "A"
     min_value: 0
     max_value: 185
