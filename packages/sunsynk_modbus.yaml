@@ -739,14 +739,22 @@ sensor:
     device_class: power
     state_class: measurement
     value_type: S_WORD
-  - platform: template                     # Essential Power based on register 175 + 167 - 166
+  # CHANGED 2026-10-03: the grid-side register depends on the model. On the
+  # 5/8 kW units 167 is the port feeding the non-essential loads; on the 12 kW
+  # (a4f026) it is 169, and using 167 swapped Essential and Nonessential (EV on
+  # non-essential showed as house load). Picked by Rated Power, so one stock
+  # build covers both. Rated Power missing -> 167, i.e. the old behaviour.
+  - platform: template                     # Essential Power: 175 + port - 166
     name: "${name_prefix}Essential Power"
     unit_of_measurement: "W"
     accuracy_decimals: 0
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(${id_prefix}esphome_inverter_power).state + id(${id_prefix}esphome_grid_power_167).state - id(${id_prefix}esphome_aux_power).state);
+      float rated = id(${id_prefix}esphome_rated_power).state;
+      float port = (!isnan(rated) && rated >= 12000) ? id(${id_prefix}esphome_grid_port_power_169).state
+                                                     : id(${id_prefix}esphome_grid_power_167).state;
+      return (id(${id_prefix}esphome_inverter_power).state + port - id(${id_prefix}esphome_aux_power).state);
     update_interval: 5s
   - platform: template                     # Essential Power1 based on register 175 + 169 - 166
     name: "${name_prefix}Essential Power 1"
@@ -757,14 +765,17 @@ sensor:
     lambda: |-
       return (id(${id_prefix}esphome_inverter_power).state + id(${id_prefix}esphome_grid_port_power_169).state - id(${id_prefix}esphome_aux_power).state);
     update_interval: 5s
-  - platform: template                     # Nonessential Power 172 - 167
+  - platform: template                     # Nonessential Power: 172 - port (see Essential above)
     name: "${name_prefix}Nonessential Power"
     unit_of_measurement: "W"
     accuracy_decimals: 0
     device_class: power
     state_class: measurement
     lambda: |-
-      return (id(${id_prefix}esphome_grid_ct_power).state - id(${id_prefix}esphome_grid_power_167).state);
+      float rated = id(${id_prefix}esphome_rated_power).state;
+      float port = (!isnan(rated) && rated >= 12000) ? id(${id_prefix}esphome_grid_port_power_169).state
+                                                     : id(${id_prefix}esphome_grid_power_167).state;
+      return (id(${id_prefix}esphome_grid_ct_power).state - port);
     update_interval: 5s
   - platform: template                     # Nonessential Power1 172 - 169
     name: "${name_prefix}Nonessential Power 1"
