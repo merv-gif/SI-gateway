@@ -755,6 +755,123 @@ sensor:
   # 616–618) are measured on a live machine with a known grid-side load.
   # Do not re-add from the kellerza map — measure it.
 
+  # ── DIAGNOSTIC: grid-side / non-essential hunt (2 Nov 2026) ──────────
+  # Read-only. Nothing in the firmware consumes these. Published as
+  # inverter_reg_NNN so si-notify can log them next to the Sunsynk app's
+  # own "House" (non-essential) figure on the friendly 3p sites, all of
+  # which have grid-side CTs. Labels are the kellerza names — UNVERIFIED,
+  # which is the whole point. Hypothesis to test:
+  #     non-essential = 625 (grid at the CTs) − 607 (inverter's own grid port)
+  # 619 is already read above as "Grid Power Total"; si-notify logs it too.
+  # Remove this block (and si-notify's inverter_reg_ hook) once mapped.
+  - platform: modbus_controller            # 604 grid internal L1 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 604"
+    id: ${id_prefix}esphome_reg_604
+    register_type: holding
+    address: 604
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 605 grid internal L2 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 605"
+    id: ${id_prefix}esphome_reg_605
+    register_type: holding
+    address: 605
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 606 grid internal L3 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 606"
+    id: ${id_prefix}esphome_reg_606
+    register_type: holding
+    address: 606
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 607 grid internal total (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 607"
+    id: ${id_prefix}esphome_reg_607
+    register_type: holding
+    address: 607
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 616 grid external L1 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 616"
+    id: ${id_prefix}esphome_reg_616
+    register_type: holding
+    address: 616
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 617 grid external L2 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 617"
+    id: ${id_prefix}esphome_reg_617
+    register_type: holding
+    address: 617
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 618 grid external L3 (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 618"
+    id: ${id_prefix}esphome_reg_618
+    register_type: holding
+    address: 618
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 625 grid total (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 625"
+    id: ${id_prefix}esphome_reg_625
+    register_type: holding
+    address: 625
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
+  - platform: modbus_controller            # 653 load total (diagnostic)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "${name_prefix}Reg 653"
+    id: ${id_prefix}esphome_reg_653
+    register_type: holding
+    address: 653
+    force_new_range: true
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    value_type: S_WORD
+
 ############################################### ENERGY ################################################
   - platform: modbus_controller            # 070 Day Battery Charge (same)
     modbus_controller_id: ${modbus_controller_id}
